@@ -96,6 +96,26 @@ class LengthPriceDbRepository
     }
 
     /**
+     * Gets the ID of the customization field used for length price for a specific product.
+     * It assumes the one with MAX ID is the relevant one if multiple exist.
+     *
+     * @param int $idProduct
+     * @return int|null
+     */
+
+    public static function getLengthCustomizationFieldIdForProduct(int $idProduct): ?int
+    {
+        $sql = new DbQuery();
+        $sql->select('cf.`id_customization_field`');
+        $sql->from('customization_field', 'cf');
+        $sql->where('cf.`id_product` = ' . $idProduct);
+        $sql->where('cf.`is_lengthprice` = 1');
+        $result = Db::getInstance()->getValue($sql);
+        return $result ? (int)$result : null;
+    }
+
+
+    /**
      * Sets the is_lengthprice flag for a given customization field.
      *
      * @param int $idCustomizationField

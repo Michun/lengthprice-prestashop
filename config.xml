@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>lengthprice</name>
+    <displayName><![CDATA[Price per Length]]></displayName>
+    <version><![CDATA[0.0.1]]></version>
+    <description><![CDATA[Calculate price based on length.]]></description>
+    <author><![CDATA[Michał Nowacki]]></author>
+    <tab><![CDATA[other]]></tab>
+    <is_configurable>0</is_configurable>
+    <need_instance>0</need_instance>
+</module>

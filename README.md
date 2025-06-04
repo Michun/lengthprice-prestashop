@@ -1,0 +1,2 @@
+added hook actionProductUpdate
+added hookDisplayAdminProductsExtra# lengthprice-prestashop

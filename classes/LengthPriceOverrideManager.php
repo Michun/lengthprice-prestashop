@@ -30,7 +30,8 @@ class Product extends ProductCore
                 'type' => self::TYPE_BOOL,
                 'validate' => 'isBool',
                 'db_type' => 'TINYINT(1)',
-                'db_default' => '0'
+                'db_default' => '0',
+                'shop' => true,
             ];
         }
         parent::__construct(\$id_product, \$full, \$id_lang, \$id_shop, \$context);

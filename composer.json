@@ -1,0 +1,17 @@
+{
+  "name": "prestashop/lengthprice",
+  "authors": [
+    {
+      "name": "Michał Nowacki"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "PrestaShop\\Module\\LengthPrice\\": "src/"
+    }
+  },
+  "config": {
+    "prepend-autoloader": false
+  },
+  "type": "prestashop-module"
+}

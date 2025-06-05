@@ -1,0 +1,9 @@
+# modules/lengthprice/services.yml
+services:
+  prestashop.module.lengthprice.service.product_settings:
+    class: PrestaShop\Module\LengthPrice\Service\LengthPriceProductSettingsService
+    arguments:
+      - '@lengthprice'
+  PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController:
+    class: PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController
+    tags: ['controller.service_arguments']

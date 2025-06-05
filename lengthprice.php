@@ -1,19 +1,20 @@
 <?php
+// modules/lengthprice/lengthprice.php
 
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once dirname(__FILE__) . '/classes/LengthPriceOverrideManager.php';
+// Usunięto LengthPriceOverrideManager, dodano Schema
+require_once dirname(__FILE__) . '/classes/Schema.php';
 require_once dirname(__FILE__) . '/classes/LengthPriceDbRepository.php';
 
 use PrestaShopBundle\Form\Admin\Type\SwitchType;
-
+use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId; // Dodano use dla ProductId w hooku delete
 
 class LengthPrice extends Module
 {
-    // Zmieniamy strukturę, aby śledzić przetwarzanie w różnych hookach
-    private static $processedProductsInRequest = [];
+    // Usunięto statyczną flagę processedProductsInRequest, bo nie jest już potrzebna w tym podejściu
 
     public function __construct()
     {
@@ -34,55 +35,101 @@ class LengthPrice extends Module
 
     public function install(): bool
     {
-        return parent::install()
-            && $this->registerHook('displayProductPriceBlock')
+        $this->logToFile('[LengthPrice] Install method started.');
+        $schema = new Schema(); // Utworzenie instancji Schema
+
+        $parentInstall = parent::install();
+        $this->logToFile('[LengthPrice] parent::install() result: ' . ($parentInstall ? 'OK' : 'FAIL'));
+        if (!$parentInstall) return false;
+
+        $hooksRegistered = $this->registerHook('displayProductPriceBlock')
             && $this->registerHook('header')
-            // Nowe hooki "Before" do ustawiania flagi na obiekcie przed zapisem
-            && $this->registerHook('actionObjectProductUpdateBefore')
-            && $this->registerHook('actionObjectProductAddBefore')
-            // Hooki "After" do zarządzania polem personalizacji (na podstawie wartości z POST)
             && $this->registerHook('actionObjectProductUpdateAfter')
             && $this->registerHook('actionObjectProductAddAfter')
-            && $this->registerHook('displayAdminProductsExtra')
-            && $this->addProductField()
-            && $this->addCustomizationFieldFlag()
-            && LengthPriceOverrideManager::createProductOverride($this);
+            && $this->registerHook('actionProductDelete')
+            && $this->registerHook('displayAdminProductsExtra');
+        $this->logToFile('[LengthPrice] registerHook() calls result: ' . ($hooksRegistered ? 'OK' : 'FAIL'));
+        if (!$hooksRegistered) return false;
+
+        $customizationFlagAdded = $this->addCustomizationFieldFlag();
+        $this->logToFile('[LengthPrice] addCustomizationFieldFlag() result: ' . ($customizationFlagAdded ? 'OK' : 'FAIL'));
+        if (!$customizationFlagAdded) return false;
+
+        $schemaInstalled = $schema->installSchema();
+        $this->logToFile('[LengthPrice] schema->installSchema() result: ' . ($schemaInstalled ? 'OK' : 'FAIL'));
+        if (!$schemaInstalled) return false;
+
+        $this->logToFile('[LengthPrice] Install method finished successfully.');
+        return true;
     }
 
     public function uninstall(): bool
     {
-        $success = parent::uninstall();
-        $success = $success && $this->unregisterHook('displayProductPriceBlock');
-        $success = $success && $this->unregisterHook('header');
-        // Wycofujemy rejestrację nowych hooków
-        $success = $success && $this->unregisterHook('actionObjectProductUpdateBefore');
-        $success = $success && $this->unregisterHook('actionObjectProductAddBefore');
-        // Wycofujemy rejestrację hooków "After"
-        $success = $success && $this->unregisterHook('actionObjectProductUpdateAfter');
-        $success = $success && $this->unregisterHook('actionObjectProductAddAfter');
-        $success = $success && $this->unregisterHook('displayAdminProductsExtra');
-        $success = $success && $this->removeProductField();
-        $success = $success && $this->removeCustomizationFieldFlag();
-        $success = $success && LengthPriceOverrideManager::removeProductOverride($this);
+        $this->logToFile('[LengthPrice] Uninstall method started.');
+        $schema = new Schema();
 
+        $success = parent::uninstall();
+        $this->logToFile('[LengthPrice] parent::uninstall() result: ' . ($success ? 'OK' : 'FAIL'));
+        if (!$success) {
+            $this->logToFile('[LengthPrice] Uninstall failed at parent::uninstall().');
+            return false;
+        }
+
+        $hookUnregister1 = $this->unregisterHook('displayProductPriceBlock');
+        $this->logToFile('[LengthPrice] unregisterHook(displayProductPriceBlock) result: ' . ($hookUnregister1 ? 'OK' : 'FAIL'));
+        $success = $success && $hookUnregister1;
+
+        $hookUnregister2 = $this->unregisterHook('header');
+        $this->logToFile('[LengthPrice] unregisterHook(header) result: ' . ($hookUnregister2 ? 'OK' : 'FAIL'));
+        $success = $success && $hookUnregister2;
+
+        $hookUnregister3 = $this->unregisterHook('actionObjectProductUpdateAfter');
+        $this->logToFile('[LengthPrice] unregisterHook(actionObjectProductUpdateAfter) result: ' . ($hookUnregister3 ? 'OK' : 'FAIL'));
+        $success = $success && $hookUnregister3;
+
+        $hookUnregister4 = $this->unregisterHook('actionObjectProductAddAfter');
+        $this->logToFile('[LengthPrice] unregisterHook(actionObjectProductAddAfter) result: ' . ($hookUnregister4 ? 'OK' : 'FAIL'));
+        $success = $success && $hookUnregister4;
+
+        $hookUnregister5 = $this->unregisterHook('actionProductDelete');
+        $this->logToFile('[LengthPrice] unregisterHook(actionProductDelete) result: ' . ($hookUnregister5 ? 'OK' : 'FAIL'));
+        $success = $success && $hookUnregister5;
+
+        $hookUnregister6 = $this->unregisterHook('displayAdminProductsExtra');
+        $this->logToFile('[LengthPrice] unregisterHook(displayAdminProductsExtra) result: ' . ($hookUnregister6 ? 'OK' : 'FAIL'));
+        $success = $success && $hookUnregister6;
+
+        if (!$success) {
+            $this->logToFile('[LengthPrice] Uninstall failed during hook unregistration.');
+            return false;
+        }
+
+        $removedCustomizationFlag = $this->removeCustomizationFieldFlag();
+        $this->logToFile('[LengthPrice] removeCustomizationFieldFlag() result: ' . ($removedCustomizationFlag ? 'OK' : 'FAIL'));
+        $success = $success && $removedCustomizationFlag;
+        if (!$success) {
+            $this->logToFile('[LengthPrice] Uninstall failed at removeCustomizationFieldFlag().');
+            return false;
+        }
+
+        $schemaUninstalled = $schema->uninstallSchema();
+        $this->logToFile('[LengthPrice] schema->uninstallSchema() result: ' . ($schemaUninstalled ? 'OK' : 'FAIL'));
+        $success = $success && $schemaUninstalled;
+        if (!$success) {
+            $this->logToFile('[LengthPrice] Uninstall failed at schema->uninstallSchema().');
+            return false;
+        }
+
+        $this->logToFile('[LengthPrice] Uninstall method finished with overall success: ' . ($success ? 'OK' : 'FAIL'));
         return $success;
     }
 
-    // Zmieniamy nazwę metody, aby lepiej odzwierciedlała jej rolę - zarządzanie polem personalizacji
-    private function _manageCustomizationField(Product $productInstance): void
+    private function _manageCustomizationField(int $productId, bool $isLengthPriceEnabledSubmitted): void
     {
-        if (!$productInstance || !$productInstance->id) {
-            $this->logToFile('[LengthPrice] _manageCustomizationField - Invalid product instance provided.');
+        if (!$productId) {
+            $this->logToFile('[LengthPrice] _manageCustomizationField - Invalid product ID provided.');
             return;
         }
-
-        $productId = (int)$productInstance->id;
-
-        // Pobierz wartość flagi bezpośrednio z danych wysłanych w formularzu
-        // Ta metoda nadal polega na Tools::getValue(), ponieważ hooki "After" są wywoływane
-        // po głównym zapisie, a wartość na obiekcie Product może być już zaktualizowana
-        // przez hook "Before" lub główny proces zapisu.
-        $isLengthPriceEnabledSubmitted = (bool)Tools::getValue('lengthprice_enabled');
 
         $this->logToFile("[LengthPrice] _manageCustomizationField dla Produktu ID: {$productId}. Flaga lengthprice_enabled (z Tools::getValue): " . ($isLengthPriceEnabledSubmitted ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
 
@@ -115,7 +162,6 @@ class LengthPrice extends Module
                 }
             } else {
                 $this->logToFile("[LengthPrice] _manageCustomizationField - CustomizationField z flagą is_lengthprice=1 już istnieje dla Produktu ID: {$productId} (ID: {$existingFieldId}). Nie tworzę nowego.");
-                // Jeśli pole już istnieje, a chcemy je aktywować, upewnijmy się, że flaga is_lengthprice jest ustawiona (choć powinna być)
                 if ($existingFieldId && !LengthPriceDbRepository::isCustomizationFieldLengthFlagEnabled((int)$existingFieldId)) {
                     if (LengthPriceDbRepository::setCustomizationFieldLengthFlag((int)$existingFieldId)) {
                         $this->logToFile("[LengthPrice] _manageCustomizationField - Ustawiono is_lengthprice=1 dla istniejącego CF ID: {$existingFieldId}.");
@@ -125,14 +171,13 @@ class LengthPrice extends Module
                 }
             }
         } else {
-            // Logika usuwania pola, jeśli $isLengthPriceEnabledSubmitted jest false
             $this->logToFile("[LengthPrice] _manageCustomizationField - Deaktywacja LengthPrice dla produktu ID: {$productId} na podstawie wartości z formularza. Sprawdzam, czy trzeba usunąć istniejące pole.");
             $existingFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($productId);
             if ($existingFieldId) {
                 $this->logToFile("[LengthPrice] _manageCustomizationField - Znaleziono istniejące pole (ID: {$existingFieldId}) do usunięcia dla Produktu ID: {$productId}.");
                 $cf_to_delete = new CustomizationField((int)$existingFieldId);
                 if (Validate::isLoadedObject($cf_to_delete)) {
-                    if ($cf_to_delete->delete()) {
+                    if ($cf_to_delete->delete(false)) {
                         $this->logToFile("[LengthPrice] _manageCustomizationField - Pomyślnie usunięto CustomizationField ID: {$existingFieldId}");
                     } else {
                         $this->logToFile("[LengthPrice] BŁĄD: _manageCustomizationField - Nie udało się usunąć CustomizationField ID: {$existingFieldId}");
@@ -149,33 +194,9 @@ class LengthPrice extends Module
 
     private function logToFile(string $message): void
     {
-        // PrestaShopLogger::addLog($message, 1, null, 'LengthPrice', null, true, $this->id);
-        // Poziom 1 = informacyjny, 2 = ostrzeżenie, 3 = błąd
-        $logfile = _PS_MODULE_DIR_ . $this->name . '/debug.log'; // Użyj $this->name dla spójności
+        $logfile = _PS_MODULE_DIR_ . $this->name . '/debug.log';
         $entry = '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
         file_put_contents($logfile, $entry, FILE_APPEND);
-    }
-
-    private function addProductField(): bool
-    {
-        $tableName = 'product';
-        $columnName = 'lengthprice_enabled';
-        if (!LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $sql = LengthPriceDbRepository::getAddColumnSql($tableName, $columnName, 'TINYINT(1) NOT NULL DEFAULT 0');
-            return Db::getInstance()->execute($sql);
-        }
-        return true;
-    }
-
-    private function removeProductField(): bool
-    {
-        $tableName = 'product';
-        $columnName = 'lengthprice_enabled';
-        if (LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $sql = LengthPriceDbRepository::getDropColumnSql($tableName, $columnName);
-            return Db::getInstance()->execute($sql);
-        }
-        return true;
     }
 
 
@@ -183,14 +204,16 @@ class LengthPrice extends Module
     {
         $tableName = 'customization_field';
         $columnName = 'is_lengthprice';
+        $this->logToFile("[LengthPrice] addCustomizationFieldFlag: Checking if column {$columnName} exists in {$tableName}.");
         if (!LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $this->logToFile("Dodaję kolumnę {$columnName} do {$tableName}");
-            $sql = LengthPriceDbRepository::getAddColumnSql($tableName, $columnName, 'TINYINT(1) NOT NULL DEFAULT 0');
+            $this->logToFile("[LengthPrice] addCustomizationFieldFlag: Column {$columnName} does not exist in {$tableName}. Attempting to add.");
+            $sql = LengthPriceDbRepository::getAddColumnSql($tableName, $columnName, 'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0');
+            $this->logToFile("[LengthPrice] addCustomizationFieldFlag: SQL to add column: " . $sql);
             $result = Db::getInstance()->execute($sql);
-            $this->logToFile("ALTER TABLE wynik: " . ($result ? 'OK' : 'BŁAD'));
+            $this->logToFile("[LengthPrice] addCustomizationFieldFlag: ALTER TABLE result: " . ($result ? 'OK' : 'FAIL - DB Error: ' . Db::getInstance()->getMsgError()));
             return (bool)$result;
         } else {
-            $this->logToFile("Kolumna {$columnName} już istnieje w {$tableName}");
+            $this->logToFile("[LengthPrice] addCustomizationFieldFlag: Column {$columnName} already exists in {$tableName}.");
         }
         return true;
     }
@@ -200,143 +223,106 @@ class LengthPrice extends Module
     {
         $tableName = 'customization_field';
         $columnName = 'is_lengthprice';
+        $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: Checking if column {$columnName} exists in {$tableName}.");
         if (LengthPriceDbRepository::columnExists($tableName, $columnName)) {
+            $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: Column {$columnName} exists in {$tableName}. Attempting to drop.");
             $sql = LengthPriceDbRepository::getDropColumnSql($tableName, $columnName);
-            return Db::getInstance()->execute($sql);
+            $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: SQL to drop column: " . $sql);
+            $result = Db::getInstance()->execute($sql);
+            $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: ALTER TABLE DROP COLUMN result: " . ($result ? 'OK' : 'FAIL - DB Error: ' . Db::getInstance()->getMsgError()));
+            return (bool)$result;
+        } else {
+            $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: Column {$columnName} does not exist in {$tableName}. Skipping drop.");
         }
         return true;
     }
 
-    // Nowy hook wywoływany PRZED zapisem obiektu Product
-    public function hookActionObjectProductUpdateBefore(array $params): void
-    {
-        $this->logToFile('[LengthPrice] hookActionObjectProductUpdateBefore triggered.');
-        if (isset($params['object']) && $params['object'] instanceof Product && $params['object']->id) {
-            $product = $params['object'];
-            $productId = (int)$product->id;
 
-            // Używamy statycznej flagi, aby upewnić się, że przetwarzamy dany produkt tylko raz na hook
-            if (isset(self::$processedProductsInRequest[$productId]['before_update'])) {
-                $this->logToFile("[LengthPrice] hookActionObjectProductUpdateBefore - Product ID: {$productId} already processed (before_update) in this request. Skipping.");
-                return;
-            }
-            self::$processedProductsInRequest[$productId]['before_update'] = true;
-
-            // Pobierz wartość flagi bezpośrednio z danych wysłanych w formularzu
-            $isLengthPriceEnabledSubmitted = (bool)Tools::getValue('lengthprice_enabled');
-
-            $this->logToFile("[LengthPrice] hookActionObjectProductUpdateBefore - Product ID: {$productId}. Value from POST: " . ($isLengthPriceEnabledSubmitted ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
-            $this->logToFile("[LengthPrice] hookActionObjectProductUpdateBefore - Product ID: {$productId}. Value on object BEFORE setting: " . ($product->lengthprice_enabled ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
-
-            // Ustaw flagę na obiekcie Product PRZED głównym zapisem
-            // Sprawdzamy, czy wartość z formularza różni się od wartości na obiekcie
-            if ((bool)$product->lengthprice_enabled !== $isLengthPriceEnabledSubmitted) {
-                $this->logToFile("[LengthPrice] hookActionObjectProductUpdateBefore - Setting lengthprice_enabled on object to: " . ($isLengthPriceEnabledSubmitted ? '1' : '0'));
-                $this->logToFile("PRZED USTAWIENIEM OBIEKTU: {$product->lengthprice_enabled}");
-                $product->lengthprice_enabled = $isLengthPriceEnabledSubmitted;
-                $this->logToFile("PO USTAWIENIU OBIEKTU: {$product->lengthprice_enabled}");
-                // NIE wywołujemy update() tutaj. Główny proces zapisu ObjectModel zrobi to za nas.
-            } else {
-                $this->logToFile("[LengthPrice] hookActionObjectProductUpdateBefore - Flag on object is already consistent with POST value. Not setting.");
-            }
-
-        } else {
-            $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductUpdateBefore - Brak obiektu Product w parametrach.');
-        }
-    }
-
-    // Nowy hook wywoływany PRZED zapisem obiektu Product (dla dodawania)
-    public function hookActionObjectProductAddBefore(array $params): void
-    {
-        $this->logToFile('[LengthPrice] hookActionObjectProductAddBefore triggered.');
-        if (isset($params['object']) && $params['object'] instanceof Product) { // ID może nie być jeszcze ustawione dla dodawania
-            $product = $params['object'];
-            // ID może być 0 lub null tutaj, obsłuż to ostrożnie, jeśli potrzebne, ale ustawienie flagi powinno być w porządku
-
-            // Pobierz wartość flagi bezpośrednio z danych wysłanych w formularzu
-            $isLengthPriceEnabledSubmitted = (bool)Tools::getValue('lengthprice_enabled');
-
-            $this->logToFile("[LengthPrice] hookActionObjectProductAddBefore - Product (ID: " . ($product->id ?? 'null') . "). Value from POST: " . ($isLengthPriceEnabledSubmitted ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
-            $this->logToFile("[LengthPrice] hookActionObjectProductAddBefore - Product (ID: " . ($product->id ?? 'null') . "). Value on object BEFORE setting: " . ($product->lengthprice_enabled ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
-
-            // Ustaw flagę na obiekcie Product PRZED głównym zapisem
-            // Sprawdzamy, czy wartość z formularza różni się od wartości na obiekcie
-            if ((bool)$product->lengthprice_enabled !== $isLengthPriceEnabledSubmitted) {
-                $this->logToFile("[LengthPrice] hookActionObjectProductAddBefore - Setting lengthprice_enabled on object to: " . ($isLengthPriceEnabledSubmitted ? '1' : '0'));
-                $product->lengthprice_enabled = $isLengthPriceEnabledSubmitted;
-                // NIE wywołujemy add() tutaj. Główny proces zapisu ObjectModel zrobi to za nas.
-            } else {
-                $this->logToFile("[LengthPrice] hookActionObjectProductAddBefore - Flag on object is already consistent with POST value. Not setting.");
-            }
-
-        } else {
-            $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductAddBefore - Brak obiektu Product w parametrach.');
-        }
-    }
-
-
-    // Hook wywoływany PO zapisie produktu (przez kontroler) - używamy go do zarządzania polem personalizacji
     public function hookActionObjectProductUpdateAfter(array $params): void
     {
         $this->logToFile('[LengthPrice] hookActionObjectProductUpdateAfter triggered.');
-        $product = null;
-
         if (isset($params['object']) && $params['object'] instanceof Product && $params['object']->id) {
             $product = $params['object'];
-            $this->logToFile('[LengthPrice] hookActionObjectProductUpdateAfter - Product object found in params. ID: ' . $product->id);
-        } elseif (isset($params['id_product'])) {
-            $id_product = (int)$params['id_product'];
-            $this->logToFile('[LengthPrice] hookActionObjectProductUpdateAfter - id_product found in params: ' . $id_product);
-            // Załaduj produkt z pełnymi danymi dla zarządzania polem personalizacji
-            $product = new Product($id_product, true, $this->context->language->id, $this->context->shop->id);
-            if (!Validate::isLoadedObject($product)) {
-                $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductUpdateAfter - Nie udało się załadować produktu ID z params: ' . $id_product);
-                return;
+            $productId = (int)$product->id;
+            $this->logToFile('[LengthPrice] hookActionObjectProductUpdateAfter - Product object found in params. ID: ' . $productId);
+
+            $isLengthPriceEnabledSubmitted = (bool)Tools::getValue('lengthprice_enabled');
+
+            $this->logToFile("[LengthPrice] hookActionObjectProductUpdateAfter - Product ID: {$productId}. Value from POST: " . ($isLengthPriceEnabledSubmitted ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
+
+            if (LengthPriceDbRepository::saveProductLengthPriceFlag($productId, $isLengthPriceEnabledSubmitted)) {
+                $this->logToFile("[LengthPrice] hookActionObjectProductUpdateAfter - Successfully saved lengthprice_enabled flag ({$isLengthPriceEnabledSubmitted}) for Product ID {$productId} in module table.");
+            } else {
+                $this->logToFile("[LengthPrice] BŁĄD: hookActionObjectProductUpdateAfter - Failed to save lengthprice_enabled flag for Product ID {$productId} in module table. DB Error: " . Db::getInstance()->getMsgError());
             }
+
+            $this->_manageCustomizationField($productId, $isLengthPriceEnabledSubmitted);
+
         } else {
-            $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductUpdateAfter - Brak obiektu Product lub id_product w parametrach.');
-            return;
-        }
-
-        $this->logToFile("NA OBIEKCIE PO update(): {$product->lengthprice_enabled}");
-
-        if ($product && $product->id) {
-            // Używamy statycznej flagi, aby upewnić się, że przetwarzamy dany produkt tylko raz na hook
-            if (isset(self::$processedProductsInRequest[(int)$product->id]['after_update'])) {
-                $this->logToFile("[LengthPrice] hookActionObjectProductUpdateAfter - Product ID: {$product->id} already processed (after_update) in this request. Skipping.");
-                return;
-            }
-            self::$processedProductsInRequest[(int)$product->id]['after_update'] = true;
-
-            $this->_manageCustomizationField($product); // Wywołujemy metodę zarządzającą polem personalizacji
-        } else {
-            $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductUpdateAfter - Product object is not valid after attempting to load/retrieve.');
+            $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductUpdateAfter - Brak obiektu Product w parametrach.');
         }
     }
 
-    // Hook wywoływany PO dodaniu produktu (przez ObjectModel) - używamy go do zarządzania polem personalizacji
     public function hookActionObjectProductAddAfter(array $params): void
     {
         $this->logToFile('[LengthPrice] hookActionObjectProductAddAfter triggered.');
         if (isset($params['object']) && $params['object'] instanceof Product && $params['object']->id) {
             $product = $params['object'];
-            $this->logToFile('[LengthPrice] hookActionObjectProductAddAfter - Product ID: ' . $product->id);
+            $productId = (int)$product->id;
+            $this->logToFile('[LengthPrice] hookActionObjectProductAddAfter - Product ID: ' . $productId);
 
-            // Używamy statycznej flagi, aby upewnić się, że przetwarzamy dany produkt tylko raz na hook
-            if (isset(self::$processedProductsInRequest[(int)$product->id]['after_add'])) {
-                $this->logToFile("[LengthPrice] hookActionObjectProductAddAfter - Product ID: {$product->id} already processed (after_add) in this request. Skipping.");
-                return;
+            $isLengthPriceEnabledSubmitted = (bool)Tools::getValue('lengthprice_enabled');
+
+            $this->logToFile("[LengthPrice] hookActionObjectProductAddAfter - Product ID: {$productId}. Value from POST: " . ($isLengthPriceEnabledSubmitted ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
+
+            if (LengthPriceDbRepository::saveProductLengthPriceFlag($productId, $isLengthPriceEnabledSubmitted)) {
+                $this->logToFile("[LengthPrice] hookActionObjectProductAddAfter - Successfully saved lengthprice_enabled flag ({$isLengthPriceEnabledSubmitted}) for Product ID {$productId} in module table.");
+            } else {
+                $this->logToFile("[LengthPrice] BŁĄD: hookActionObjectProductAddAfter - Failed to save lengthprice_enabled flag for Product ID {$productId} in module table. DB Error: " . Db::getInstance()->getMsgError());
             }
-            self::$processedProductsInRequest[(int)$product->id]['after_add'] = true;
 
-            $this->_manageCustomizationField($product); // Wywołujemy metodę zarządzającą polem personalizacji
+            $this->_manageCustomizationField($productId, $isLengthPriceEnabledSubmitted);
+
         } else {
             $this->logToFile('[LengthPrice] BŁĄD: hookActionObjectProductAddAfter - Brak obiektu Product w parametrach.');
         }
     }
 
+    public function hookActionProductDelete(array $params): void
+    {
+        $this->logToFile('[LengthPrice] hookActionProductDelete triggered.');
+        $productId = null;
 
-    // hookHeader i hookDisplayProductPriceBlock pozostają bez zmian
+        if (isset($params['id_product'])) {
+            $productId = (int)$params['id_product'];
+            $this->logToFile('[LengthPrice] hookActionProductDelete - id_product found in params: ' . $productId);
+        } elseif (isset($params['id'])) {
+            $productId = (int)$params['id'];
+            $this->logToFile('[LengthPrice] hookActionProductDelete - id found in params: ' . $productId);
+        } elseif (isset($params['productId']) && $params['productId'] instanceof ProductId) {
+            $productId = (int)$params['productId']->getValue();
+            $this->logToFile('[LengthPrice] hookActionProductDelete - ProductId Value Object found in params. ID: ' . $productId);
+        } elseif (isset($params['object']) && $params['object'] instanceof Product && $params['object']->id) {
+            $productId = (int)$params['object']->id;
+            $this->logToFile('[LengthPrice] hookActionProductDelete - Product object found in params. ID: ' . $productId);
+        }
+
+
+        if ($productId) {
+            $this->logToFile("[LengthPrice] hookActionProductDelete - Deleting module settings for Product ID: {$productId}.");
+            // Usuń wpis z naszej dedykowanej tabeli
+            if (LengthPriceDbRepository::deleteProductLengthPriceFlag($productId)) {
+                $this->logToFile("[LengthPrice] hookActionProductDelete - Successfully deleted lengthprice_enabled flag for Product ID {$productId} from module table.");
+            } else {
+                $this->logToFile("[LengthPrice] BŁĄD: hookActionProductDelete - Failed to delete lengthprice_enabled flag for Product ID {$productId} from module table. DB Error: " . Db::getInstance()->getMsgError());
+            }
+        } else {
+            $this->logToFile('[LengthPrice] BŁĄD: hookActionProductDelete - Could not determine Product ID from params.');
+        }
+    }
+
+
+    // hookHeader - modyfikacja do odczytu flagi z nowej tabeli
     public function hookHeader(): void
     {
         $this->context->controller->addJS($this->_path . 'views/js/lengthprice.js');
@@ -348,11 +334,20 @@ class LengthPrice extends Module
             }
 
             if ($idProduct > 0) {
-                $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($idProduct);
-                if ($customizationFieldId !== null) { // Sprawdź, czy ID zostało znalezione
-                    Media::addJsDef(['lengthpriceCustomizationFieldId' => $customizationFieldId]);
+                // Sprawdź flagę w naszej dedykowanej tabeli
+                $isLengthPriceEnabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($idProduct);
+
+                if ($isLengthPriceEnabled) {
+                    $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($idProduct);
+                    if ($customizationFieldId !== null) { // Sprawdź, czy ID zostało znalezione
+                        Media::addJsDef(['lengthpriceCustomizationFieldId' => $customizationFieldId]);
+                        $this->logToFile("[LengthPrice] hookHeader - LengthPrice enabled and CF found for product ID: {$idProduct}. CF ID: {$customizationFieldId}");
+                    } else {
+                        // To może się zdarzyć, jeśli flaga w naszej tabeli jest true, ale pole personalizacji nie istnieje
+                        $this->logToFile("[LengthPrice] hookHeader - LengthPrice enabled for product ID: {$idProduct}, but customization field not found.");
+                    }
                 } else {
-                    $this->logToFile("[LengthPrice] hookHeader - Nie znaleziono pola personalizacji LengthPrice dla produktu ID: {$idProduct}.");
+                    $this->logToFile("[LengthPrice] hookHeader - LengthPrice is NOT enabled for product ID: {$idProduct}.");
                 }
             }
         }
@@ -369,26 +364,30 @@ class LengthPrice extends Module
 
         /** @var Product $product */
         $product = $params['product'];
+        $productId = (int)$product->id;
 
-        // Sprawdzamy flagę na obiekcie Product
-        if (!$product->lengthprice_enabled) {
+        if (!$productId) {
+            $this->logToFile('[LengthPrice] hookDisplayProductPriceBlock - Invalid product ID.');
             return '';
         }
 
-        $this->logToFile('MODUŁ lengthprice JEST WYWOŁANY DLA: ' . $product->id);
+        $isLengthPriceEnabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($productId);
 
-        $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct((int)$product->id);
+        if (!$isLengthPriceEnabled) {
+            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - LengthPrice is NOT enabled for product ID: {$productId}. Not displaying block.");
+            return '';
+        }
+
+        $this->logToFile('MODUŁ lengthprice JEST WYWOŁANY DLA: ' . $productId);
+
+        $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($productId);
 
         if ($customizationFieldId === null) {
-            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Nie znaleziono pola personalizacji LengthPrice dla produktu ID: {$product->id}. Nie wyświetlam bloku.");
+            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Nie znaleziono pola personalizacji LengthPrice dla produktu ID: {$productId}. Nie wyświetlam bloku.");
             return ''; // Nie wyświetlaj bloku, jeśli pole nie istnieje
         }
 
-        // Pobierz cenę jednostkową - upewnij się, że ta logika jest poprawna dla Twoich potrzeb
-        // Product::getPriceStatic może nie być najlepszym miejscem do pobierania ceny "jednostkowej"
-        // jeśli cena produktu jest ceną całkowitą. Może potrzebujesz dedykowanego pola w produkcie
-        // lub innej logiki do przechowywania/obliczania ceny za jednostkę długości.
-        $price_per_unit = Product::getPriceStatic($product->id, true, null, 6);
+        $price_per_unit = Product::getPriceStatic($productId, true, null, 6);
 
 
         $this->context->smarty->assign([
@@ -399,22 +398,25 @@ class LengthPrice extends Module
         return $this->fetch('module:' . $this->name . '/views/templates/hook/lengthprice.tpl');
     }
 
-    // hookDisplayAdminProductsExtra pozostaje bez zmian
     public function hookDisplayAdminProductsExtra(array $params): string // Dodano typowanie
     {
         $this->logToFile('[LengthPrice] hookDisplayAdminProductsExtra.');
 
         $id_product = (int)$params['id_product'];
-        // Ładujemy produkt z pełnymi danymi, aby mieć dostęp do flagi z override'u
-        $product = new Product($id_product, true, $this->context->language->id, $this->context->shop->id);
 
-        if (!Validate::isLoadedObject($product)) {
+        if (!$id_product) {
+            $this->logToFile('[LengthPrice] hookDisplayAdminProductsExtra - Invalid product ID.');
             return $this->trans('Product not found.', [], 'Modules.Lengthprice.Admin');
         }
 
+        $lengthprice_enabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($id_product);
+
+        $this->logToFile("[LengthPrice] hookDisplayAdminProductsExtra - Reading lengthprice_enabled flag for Product ID {$id_product} from module table: " . ($lengthprice_enabled ? 'WŁĄCZONA' : 'WYŁĄCZONA'));
+
+
         $this->context->smarty->assign([
-            'lengthprice_enabled' => (bool)$product->lengthprice_enabled, // Dostęp dzięki override
-            'id_product' => $product->id,
+            'lengthprice_enabled' => $lengthprice_enabled, // Odczytane z naszej tabeli
+            'id_product' => $id_product,
         ]);
 
         return $this->fetch('module:' . $this->name . '/views/templates/admin/lengthprice_module_tab.tpl');

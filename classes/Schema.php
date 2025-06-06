@@ -18,8 +18,6 @@ class Schema
      */
     private function getInstallSql(): string
     {
-        // Tabela do przechowywania flagi lengthprice_enabled dla każdego produktu
-        // id_product jako klucz główny zapewnia unikalność wpisu dla każdego produktu
         return '
             CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . 'lengthprice_product_settings` (
               `id_product` int(10) UNSIGNED NOT NULL,

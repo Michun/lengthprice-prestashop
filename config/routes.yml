@@ -1,7 +1,6 @@
 # /modules/lengthprice/config/routes.yml
 lengthprice_admin_save_settings:
-  path: /lengthprice/admin/save-settings # Ścieżka URL dla Twojej akcji AJAX
-  methods: [POST] # Użyj metody POST dla zapisu danych
+  path: /lengthprice/admin/save-settings
+  methods: [POST]
   defaults:
     _controller: 'PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController::saveProductSettingsAction'
-    # _legacy_controller i _legacy_link nie są potrzebne dla czysto Symfony'owych tras AJAX

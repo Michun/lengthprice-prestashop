@@ -66,54 +66,43 @@ class LengthPriceDbRepository
      * @param int $idLang The language ID to check the field name against.
      * @return int|null Returns the ID of the customization field or null if not found.
      */
+    // In /Users/michalnowacki/Projects/prestashop-dev/modules/lengthprice/classes/LengthPriceDbRepository.php
     public static function getLengthCustomizationFieldIdForProduct(int $idProduct, int $idLang): ?int
     {
-        // Ensure the custom column exists before querying it
+        // Logowanie dla debugowania
+        $debugLogFile = _PS_MODULE_DIR_ . 'lengthprice/debug.log';
+        $logPrefix = '[LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct] ';
+        $logMessage = $logPrefix . "Attempting to find CF for Product ID: {$idProduct}, Lang ID: {$idLang}" . PHP_EOL;
+        @file_put_contents($debugLogFile, '[' . date('Y-m-d H:i:s') . '] ' . $logMessage, FILE_APPEND);
+
         if (!self::columnExists('customization_field', 'is_lengthprice')) {
-            // Log this if it happens unexpectedly after install
-            // error_log("LengthPrice: Column 'is_lengthprice' does not exist in customization_field.");
+            $logMessage = $logPrefix . "Column 'is_lengthprice' does NOT exist in 'customization_field'. Returning null." . PHP_EOL;
+            @file_put_contents($debugLogFile, '[' . date('Y-m-d H:i:s') . '] ' . $logMessage, FILE_APPEND);
             return null;
         }
 
-        // First, try to find a customization field by product, type, and name (in the given language)
-        // This is more reliable than just relying on the custom flag immediately after creation
         $sql = new \DbQuery();
         $sql->select('cf.id_customization_field');
         $sql->from('customization_field', 'cf');
-        $sql->innerJoin('customization_field_lang', 'cfl', 'cfl.id_customization_field = cf.id_customization_field');
         $sql->where('cf.id_product = ' . (int)$idProduct);
-        $sql->where('cf.type = ' . (int)\Product::CUSTOMIZE_TEXTFIELD); // Assuming it's always a text field
-        $sql->where('cfl.id_lang = ' . (int)$idLang);
-        // Match the name used when creating the field
-        $sql->where('cfl.name = \'' . pSQL('Length (mm)') . '\''); // Use the exact name from _manageCustomizationField
-        $sql->where('cf.is_deleted = 0'); // Ensure it's not marked as deleted
+        $sql->where('cf.is_lengthprice = 1');
+        $sql->where('cf.is_deleted = 0');
+        $sql->where('cf.type = ' . (int)\Product::CUSTOMIZE_TEXTFIELD);
 
-        $fieldId = (int)\Db::getInstance()->getValue($sql->build());
+        $queryString = $sql->build();
+        $logMessage = $logPrefix . "Query to find CF by is_lengthprice flag: " . $queryString . PHP_EOL;
+        @file_put_contents($debugLogFile, '[' . date('Y-m-d H:i:s') . '] ' . $logMessage, FILE_APPEND);
 
-        // If a field matching type and name is found, verify it has our flag set
+        $fieldId = (int)\Db::getInstance()->getValue($queryString);
+
         if ($fieldId > 0) {
-            // Now check if this specific field has our flag set to 1
-            // This handles cases where the field might exist but wasn't fully set up by our module
-            $sqlCheckFlag = new \DbQuery();
-            $sqlCheckFlag->select('is_lengthprice');
-            $sqlCheckFlag->from('customization_field');
-            $sqlCheckFlag->where('id_customization_field = ' . (int)$fieldId);
-            $sqlCheckFlag->where('is_lengthprice = 1'); // Explicitly check for 1
-
-            $flagIsEnabled = (bool)\Db::getInstance()->getValue($sqlCheckFlag->build());
-
-            if ($flagIsEnabled) {
-                return $fieldId; // Found our field with the correct flag
-            } else {
-                // Log this scenario: Found a field ID {$fieldId} by name/type for product {$idProduct}, but is_lengthprice is not 1.
-                // This might indicate a partial save or conflict.
-                // error_log("LengthPrice: Found CF ID {$fieldId} by name/type for product {$idProduct}, but is_lengthprice is not 1.");
-                // We should NOT return this field, as it's not fully configured by our module.
-                return null;
-            }
+            $logMessage = $logPrefix . "Found CF ID: {$fieldId} by is_lengthprice flag." . PHP_EOL;
+            @file_put_contents($debugLogFile, '[' . date('Y-m-d H:i:s') . '] ' . $logMessage, FILE_APPEND);
+            return $fieldId;
         }
 
-        // If no field found by type/name or the found field didn't have the flag, return null
+        $logMessage = $logPrefix . "No CF found with is_lengthprice=1 for Product ID: {$idProduct}. Returning null." . PHP_EOL;
+        @file_put_contents($debugLogFile, '[' . date('Y-m-d H:i:s') . '] ' . $logMessage, FILE_APPEND);
         return null;
     }
 
@@ -169,23 +158,18 @@ class LengthPriceDbRepository
             'is_enabled' => (int)$isEnabled,
         ];
 
-        // Sprawdź, czy rekord dla tego produktu już istnieje
         $existing = \Db::getInstance()->getRow('SELECT `id_product` FROM `' . _DB_PREFIX_ . 'lengthprice_product_settings` WHERE `id_product` = ' . (int)$idProduct);
 
         if ($existing) {
-            // Rekord istnieje, zaktualizuj
             return \Db::getInstance()->update(
                 'lengthprice_product_settings', // Table name without prefix
                 $data,
                 '`id_product` = ' . (int)$idProduct // WHERE condition
             );
         } else {
-            // Rekord nie istnieje, wstaw nowy
-            // Wstaw tylko jeśli is_enabled jest true, aby uniknąć pustych wpisów dla produktów z wyłączoną opcją
             if ($isEnabled) {
                 return \Db::getInstance()->insert('lengthprice_product_settings', $data);
             }
-            // Jeśli is_enabled jest false i rekord nie istnieje, nic nie robimy
             return true;
         }
     }
@@ -203,7 +187,7 @@ class LengthPriceDbRepository
         $sql->from('lengthprice_product_settings');
         $sql->where('`id_product` = ' . (int)$idProduct);
 
-        $result = \Db::getInstance()->getValue($sql->build()); // POPRAWKA: Dodano ->build()
+        $result = \Db::getInstance()->getValue($sql->build());
         return (bool)$result;
     }
 

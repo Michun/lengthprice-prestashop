@@ -6,6 +6,7 @@ if (!defined('_PS_VERSION_')) {
 
 require_once dirname(__FILE__) . '/classes/Schema.php';
 require_once dirname(__FILE__) . '/classes/LengthPriceDbRepository.php';
+require_once dirname(__FILE__) . '/classes/LengthPriceCartRepository.php';
 require_once dirname(__FILE__) . '/src/Service/LengthPriceProductSettingsService.php';
 
 use PrestaShopBundle\Form\Admin\Type\SwitchType;
@@ -48,11 +49,11 @@ class LengthPrice extends Module
         }
         $this->logToFile('[LengthPrice] installControllers() result: OK');
 
-
         $hooksRegistered = $this->registerHook('displayProductPriceBlock')
             && $this->registerHook('header')
             && $this->registerHook('actionProductDelete')
-            && $this->registerHook('displayAdminProductsExtra');
+            && $this->registerHook('displayAdminProductsExtra')
+            && $this->registerHook('actionCartSave');
         $this->logToFile('[LengthPrice] registerHook() calls result: ' . ($hooksRegistered ? 'OK' : 'FAIL'));
         if (!$hooksRegistered) return false;
 
@@ -60,7 +61,11 @@ class LengthPrice extends Module
         $this->logToFile('[LengthPrice] addCustomizationFieldFlag() result: ' . ($customizationFlagAdded ? 'OK' : 'FAIL'));
         if (!$customizationFlagAdded) return false;
 
-        $schemaInstalled = $schema->installSchema();
+        $customizedDataColumnAdded = $this->addLengthpriceDataColumnToCustomizedDataTable();
+        $this->logToFile('[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable() result: ' . ($customizedDataColumnAdded ? 'OK' : 'FAIL'));
+        if (!$customizedDataColumnAdded) return false;
+
+        $schemaInstalled = $schema->installSchema(); // Dla ps_lengthprice_product_settings
         $this->logToFile('[LengthPrice] schema->installSchema() result: ' . ($schemaInstalled ? 'OK' : 'FAIL'));
         if (!$schemaInstalled) return false;
 
@@ -115,6 +120,11 @@ class LengthPrice extends Module
             $this->logToFile('[LengthPrice] Uninstall failed at removeCustomizationFieldFlag().');
         }
 
+        $customizedDataColumnRemoved = $this->removeLengthpriceDataColumnFromCustomizedDataTable();
+        $this->logToFile('[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable() result: ' . ($customizedDataColumnRemoved ? 'OK' : 'FAIL'));
+        $success = $success && $customizedDataColumnRemoved;
+
+
         $schemaUninstalled = $schema->uninstallSchema();
         $this->logToFile('[LengthPrice] schema->uninstallSchema() result: ' . ($schemaUninstalled ? 'OK' : 'FAIL'));
         $success = $success && $schemaUninstalled;
@@ -168,6 +178,43 @@ class LengthPrice extends Module
             return (bool)$result;
         } else {
             $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: Column {$columnName} does not exist in {$tableName}. Skipping drop.");
+        }
+        return true;
+    }
+
+    private function addLengthpriceDataColumnToCustomizedDataTable(): bool
+    {
+        $tableName = 'customized_data';
+        $columnName = 'lengthprice_data';
+        $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: Checking if column {$columnName} exists in {$tableName}.");
+        if (!LengthPriceDbRepository::columnExists($tableName, $columnName)) {
+            $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: Column {$columnName} does not exist in {$tableName}. Attempting to add.");
+            // TEXT może przechowywać dłuższe JSONy niż VARCHAR
+            $sql = LengthPriceDbRepository::getAddColumnSql($tableName, $columnName, 'TEXT DEFAULT NULL');
+            $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: SQL to add column: " . $sql);
+            $result = Db::getInstance()->execute($sql);
+            $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: ALTER TABLE result: " . ($result ? 'OK' : 'FAIL - DB Error: ' . Db::getInstance()->getMsgError()));
+            return (bool)$result;
+        } else {
+            $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: Column {$columnName} already exists in {$tableName}.");
+        }
+        return true;
+    }
+
+    private function removeLengthpriceDataColumnFromCustomizedDataTable(): bool
+    {
+        $tableName = 'customized_data';
+        $columnName = 'lengthprice_data';
+        $this->logToFile("[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable: Checking if column {$columnName} exists in {$tableName}.");
+        if (LengthPriceDbRepository::columnExists($tableName, $columnName)) {
+            $this->logToFile("[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable: Column {$columnName} exists in {$tableName}. Attempting to drop.");
+            $sql = LengthPriceDbRepository::getDropColumnSql($tableName, $columnName);
+            $this->logToFile("[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable: SQL to drop column: " . $sql);
+            $result = Db::getInstance()->execute($sql);
+            $this->logToFile("[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable: ALTER TABLE DROP COLUMN result: " . ($result ? 'OK' : 'FAIL - DB Error: ' . Db::getInstance()->getMsgError()));
+            return (bool)$result;
+        } else {
+            $this->logToFile("[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable: Column {$columnName} does not exist in {$tableName}. Skipping drop.");
         }
         return true;
     }
@@ -273,50 +320,136 @@ class LengthPrice extends Module
         }
     }
 
+
     public function hookDisplayProductPriceBlock(array $params): string
     {
-        if (!isset($params['product']) || !($params['product'] instanceof Product)) {
+        // 1. Sprawdź typ hooka - interesuje nas tylko 'after_price'
+        if (!isset($params['type']) || $params['type'] !== 'after_price') {
+            // Celowo nie dodajemy tutaj logu, aby nie zaśmiecać, jeśli hook jest wołany z innymi typami
             return '';
         }
-        if ($params['type'] !== 'after_price') {
-            return '';
+        $this->logToFile('[LengthPrice] hookDisplayProductPriceBlock - Hook type is "after_price".');
+
+        $productId = 0;
+
+        if (isset($params['product'])) {
+            if ($params['product'] instanceof Product && isset($params['product']->id)) {
+                $productId = (int)$params['product']->id;
+                $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Product ID {$productId} obtained from Product object in params.");
+            }
+            elseif (isset($params['product']['id_product'])) {
+                $productId = (int)$params['product']['id_product'];
+                $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Product ID {$productId} obtained from params['product']['id_product'] (likely ProductLazyArray or array).");
+            } else {
+                $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - params['product'] is set but Product ID could not be extracted. Value type: " . gettype($params['product']));
+            }
         }
 
-        /** @var Product $product */
-        $product = $params['product'];
-        $productId = (int)$product->id;
+        if (!$productId && isset($this->context->controller->product) && $this->context->controller->product instanceof Product && isset($this->context->controller->product->id)) {
+            $productId = (int)$this->context->controller->product->id;
+            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Product ID {$productId} obtained from context->controller->product.");
+        }
 
         if (!$productId) {
-            $this->logToFile('[LengthPrice] hookDisplayProductPriceBlock - Invalid product ID.');
+            $this->logToFile('[LengthPrice] hookDisplayProductPriceBlock - Exiting: Product ID could not be definitively obtained.');
             return '';
         }
+        $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Proceeding with Product ID: {$productId}.");
 
+        // 4. Kontynuuj z logiką modułu, używając $productId
         $isLengthPriceEnabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($productId);
-
         if (!$isLengthPriceEnabled) {
-            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - LengthPrice is NOT enabled for product ID: {$productId}. Not displaying block.");
+            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Exiting: LengthPrice is NOT enabled for product ID: {$productId}.");
             return '';
         }
-
-        $this->logToFile('MODUŁ lengthprice JEST WYWOŁANY DLA: ' . $productId);
+        $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - LengthPrice IS enabled for product ID: {$productId}.");
 
         $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($productId, (int)$this->context->language->id);
-
         if ($customizationFieldId === null) {
-            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Nie znaleziono pola personalizacji LengthPrice dla produktu ID: {$productId}. Nie wyświetlam bloku.");
+            $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Exiting: Nie znaleziono pola personalizacji LengthPrice dla produktu ID: {$productId}.");
             return '';
         }
+        $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Found CF ID: {$customizationFieldId} for product ID: {$productId}.");
 
+        // Używamy $productId do pobrania ceny
         $price_per_unit = Product::getPriceStatic($productId, true, null, 6);
-
+        $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Price per unit for product ID {$productId}: {$price_per_unit}.");
 
         $this->context->smarty->assign([
             'price_per_unit' => $price_per_unit,
             'customization_field_id' => $customizationFieldId,
         ]);
+        $this->logToFile("[LengthPrice] hookDisplayProductPriceBlock - Smarty variables assigned. Fetching template 'module:{$this->name}/views/templates/hook/lengthprice.tpl'...");
 
         return $this->fetch('module:' . $this->name . '/views/templates/hook/lengthprice.tpl');
     }
+
+    public function hookActionCartSave(array $params): void
+    {
+        $this->logToFile('[LengthPrice] hookActionCartSave triggered.');
+        if (!isset($params['cart']) || !$params['cart'] instanceof Cart) {
+            $this->logToFile('[LengthPrice] hookActionCartSave - Cart object not found in params.');
+            return;
+        }
+
+        /** @var Cart $cart */
+        $cart = $params['cart'];
+        $productsInCart = $cart->getProducts(true); // true to get customizations
+
+        if (empty($productsInCart)) {
+            $this->logToFile('[LengthPrice] hookActionCartSave - Cart is empty.');
+            return;
+        }
+
+        // Inicjalizacja repozytorium
+        $translator = SymfonyContainer::getInstance()->get('translator');
+        $languages = Language::getLanguages(false);
+        $cartRepository = new LengthPriceCartRepository(
+            $this,
+            Db::getInstance(),
+            _DB_PREFIX_,
+            $translator,
+            $languages
+        );
+
+        foreach ($productsInCart as $product) {
+            if (isset($product['id_customization']) && (int)$product['id_customization'] > 0) {
+                $idCustomization = (int)$product['id_customization'];
+                $idProduct = (int)$product['id_product'];
+                $idShop = (int)$this->context->shop->id;
+
+                $lengthPriceCustomizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($idProduct, (int)$this->context->language->id);
+
+                if ($lengthPriceCustomizationFieldId === null) {
+                    $this->logToFile("[LengthPrice] hookActionCartSave - No lengthprice customization field found for product ID {$idProduct}. Skipping.");
+                    continue;
+                }
+
+                $query = new DbQuery();
+                $query->select('`value`');
+                $query->from('customized_data');
+                $query->where('`id_customization` = ' . $idCustomization);
+                $query->where('`index` = ' . (int)$lengthPriceCustomizationFieldId);
+                $query->where('`type` = 0');
+
+                $lengthValue = Db::getInstance()->getValue($query);
+
+                if ($lengthValue !== false && $lengthValue !== null) {
+                    $this->logToFile("[LengthPrice] hookActionCartSave - Found length value '{$lengthValue}' for product ID {$idProduct}, customization ID {$idCustomization}, field ID {$lengthPriceCustomizationFieldId}.");
+
+                    $structuredData = ['length' => $lengthValue];
+                    if ($cartRepository->updateStructuredCustomizationData($idCustomization, $lengthPriceCustomizationFieldId, $structuredData)) {
+                        $this->logToFile("[LengthPrice] hookActionCartSave - Successfully updated structured data for customization ID {$idCustomization}.");
+                    } else {
+                        $this->logToFile("[LengthPrice] hookActionCartSave - Failed to update structured data for customization ID {$idCustomization}.");
+                    }
+                } else {
+                    $this->logToFile("[LengthPrice] hookActionCartSave - No length value found in customized_data for product ID {$idProduct}, customization ID {$idCustomization}, field ID {$lengthPriceCustomizationFieldId}. Query: " . $query);
+                }
+            }
+        }
+    }
+
 
     public function hookDisplayAdminProductsExtra(array $params): string
     {

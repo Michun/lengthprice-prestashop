@@ -24,7 +24,6 @@ class LengthPriceDbRepository
         $prefix = _DB_PREFIX_;
         $databaseName = _DB_NAME_;
 
-        // Użyj bezpośredniego zapytania SQL dla INFORMATION_SCHEMA
         $sql = 'SELECT COUNT(*)
                 FROM `INFORMATION_SCHEMA`.`COLUMNS`
                 WHERE `TABLE_SCHEMA` = \'' . pSQL($databaseName) . '\'

@@ -1,9 +1,23 @@
-# modules/lengthprice/services.yml
 services:
+  lengthprice:
+    class: LengthPrice
+    factory: ['Module', 'getInstanceByName']
+    arguments:
+      - 'lengthprice'
+    public: true
+
   prestashop.module.lengthprice.service.product_settings:
     class: PrestaShop\Module\LengthPrice\Service\LengthPriceProductSettingsService
+    public: true
     arguments:
       - '@lengthprice'
+
   PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController:
     class: PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController
+    public: true
+    arguments:
+      - '@lengthprice' # Wstrzyknij serwis modułu
+      - '@prestashop.module.lengthprice.service.product_settings'
+      - '@translator'
     tags: ['controller.service_arguments']
+    

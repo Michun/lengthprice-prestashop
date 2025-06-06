@@ -53,8 +53,8 @@ $(document).ready(function() {
             method: 'POST',
             dataType: 'json',
             data: {
-                ajax: 1, // Wymagane przez kontrolery AJAX w PrestaShop
-                action: 'saveProductSettings', // Nazwa metody ajaxProcess... bez prefiksu 'ajaxProcess'
+                // ajax: 1, // Wymagane przez kontrolery AJAX w PrestaShop
+                // action: 'saveProductSettingsAction', // Nazwa metody ajaxProcess... bez prefiksu 'ajaxProcess'
                 id_product: productId,
                 lengthprice_enabled: isEnabled,
                 // Dodaj token bezpieczeństwa, jeśli jest wymagany przez PrestaShop (zalecane)

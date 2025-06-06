@@ -1,63 +1,68 @@
 <?php
-// modules/lengthprice/controllers/admin/AdminLengthPriceSettingsController.php
 
 namespace PrestaShop\Module\LengthPrice\Controller\Admin;
 
 use PrestaShop\Module\LengthPrice\Service\LengthPriceProductSettingsService;
 use Tools;
-use Validate; // Dodaj Validate, jeśli używasz go w kontrolerze (choć w serwisie jest lepsze miejsce)
-use Db; // Dodaj Db, jeśli używasz go w kontrolerze (choć w serwisie jest lepsze miejsce)
-
+use Validate;
+use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-class AdminLengthPriceSettingsController extends ModuleAdminController
+class AdminLengthPriceSettingsController extends FrameworkBundleAdminController
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->bootstrap = true;
+    private \LengthPrice $moduleInstance;
+    private LengthPriceProductSettingsService $settingsService;
+    private TranslatorInterface $translator;
+
+    public function __construct(
+        \LengthPrice $moduleInstance,
+        LengthPriceProductSettingsService $settingsService,
+        TranslatorInterface $translator
+    ) {
+        $this->moduleInstance = $moduleInstance;
+        $this->settingsService = $settingsService;
+        $this->translator = $translator;
+
+        $this->moduleInstance->logToFile('[AdminLengthPriceSettingsController] CONSTRUCTOR CALLED.');
     }
 
-    /**
-     * Handle AJAX request to save product settings.
-     */
-    public function ajaxProcessSaveProductSettings(): void
-    {
-        $productId = (int)Tools::getValue('id_product');
-        $isEnabled = (bool)Tools::getValue('lengthprice_enabled');
 
-        // Użyj $this->module do logowania, bo $this->module jest dostępne w ModuleAdminController
-        $this->module->logToFile('[AdminLengthPriceSettingsController] ajaxProcessSaveProductSettings triggered.');
-        $this->module->logToFile("[AdminLengthPriceSettingsController] Received Product ID: {$productId}, isEnabled: " . ($isEnabled ? 'true' : 'false'));
+    public function saveProductSettingsAction(Request $request): JsonResponse
+    {
+        $this->moduleInstance->logToFile('[AdminLengthPriceSettingsController] saveProductSettingsAction CALLED.');
+
+        $productId = (int)$request->request->get('id_product');
+        $isEnabled = (bool)$request->request->get('lengthprice_enabled');
+
+        $this->moduleInstance->logToFile("[AdminLengthPriceSettingsController] Received Product ID: {$productId}, isEnabled: " . ($isEnabled ? 'true' : 'false'));
 
         if (!$productId) {
-            $this->ajaxDie(json_encode([
+            return new JsonResponse([
                 'success' => false,
-                'message' => $this->module->l('Invalid product ID.'),
-            ]));
+                'message' => $this->translator->trans('Invalid product ID.', [], 'Modules.Lengthprice.Admin'),
+            ]);
         }
 
-        // Pobierz serwis z kontenera
-        // W ModuleAdminController możesz uzyskać dostęp do kontenera przez $this->getContainer()
-        /** @var LengthPriceProductSettingsService $settingsService */
-        $settingsService = $this->getContainer()->get('prestashop.module.lengthprice.service.product_settings');
-
-        $success = $settingsService->handleProductSettingsChange($productId, $isEnabled);
+        $success = $this->settingsService->handleProductSettingsChange($productId, $isEnabled);
 
         if ($success) {
-            $this->ajaxDie(json_encode([
+            return new JsonResponse([
                 'success' => true,
-                'message' => $this->module->l('Settings updated successfully.'),
-            ]));
+                'message' => $this->translator->trans('Settings updated successfully.', [], 'Modules.Lengthprice.Admin'),
+            ]);
         } else {
-            // Komunikat błędu jest już logowany w serwisie
-            $this->ajaxDie(json_encode([
+            return new JsonResponse([
                 'success' => false,
-                'message' => $this->module->l('Failed to update settings.'),
-            ]));
+                'message' => $this->translator->trans('Failed to update settings.', [], 'Modules.Lengthprice.Admin'),
+            ]);
         }
     }
+
 }
+    

@@ -84,12 +84,10 @@ class Schema
             return $result;
         } catch (\Exception $e) {
             $this->logToFile('[Schema] Schema Uninstall Exception: ' . $e->getMessage()); // Dodane logowanie
-            // PrestaShopLogger::addLog('LengthPrice Schema Uninstall Error: ' . $e->getMessage(), 3, null, null, null, true);
             return false;
         }
     }
 
-    // Prosta metoda logowania do pliku debug.log modułu
     private function logToFile(string $message): void
     {
         $logfile = _PS_MODULE_DIR_ . 'lengthprice/debug-schema.log';

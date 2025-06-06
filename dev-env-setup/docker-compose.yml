@@ -1,0 +1,82 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    # Dla mysql:8.0 na ARM64 platforma nie powinna być potrzebna, obraz jest multi-arch
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb_use_native_aio=0
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: prestashop
+      MYSQL_USER: prestashop
+      MYSQL_PASSWORD: admin
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prestashop:
+    platform: linux/amd64
+    build: .
+    container_name: prestashop
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    environment:
+      DB_SERVER: mysql
+      DB_NAME: prestashop
+      DB_USER: prestashop
+      DB_PASSWORD: admin
+      DB_PORT: "3306"
+      PS_DEV_MODE: 1
+      PS_INSTALL_AUTO: 1
+      PS_DOMAIN: localhost:8080
+      ADMIN_MAIL: admin@example.com
+      ADMIN_PASSWD: admin123
+    ports:
+      - "8080:80"
+    volumes:
+      - ./modules:/var/www/html/modules
+      - ./override:/var/www/html/override
+      - ./classes:/var/www/html/classes
+      - ./controllers:/var/www/html/controllers
+      - ./app:/var/www/html/app
+      - ./themes:/var/www/html/themes
+      - ./src:/var/www/html/src
+      - ./.docker/php.ini:/usr/local/etc/php/conf.d/zz-custom.ini
+      - ./.docker/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+
+  phpmyadmin:
+    # platform: linux/amd64 # Spróbuj bez dla phpmyadmin, jest multi-arch
+    image: phpmyadmin/phpmyadmin
+    container_name: pma-prestashop
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: admin
+    ports:
+      - "8081:80"
+
+  mailhog:
+    # platform: linux/amd64 # Spróbuj bez dla mailhog, jest multi-arch
+    image: mailhog/mailhog
+    container_name: mailhog-prestashop
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  mysql_data:

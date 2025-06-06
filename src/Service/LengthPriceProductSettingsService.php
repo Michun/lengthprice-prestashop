@@ -116,7 +116,6 @@ class LengthPriceProductSettingsService
                 }
             } else {
                 $this->module->logToFile("[LengthPriceProductSettingsService] handleProductSettingsChange - Brak pola is_lengthprice do usunięcia dla Produktu ID: {$productId}.");
-                // Jeśli opcja była wyłączona i nie znaleziono pola do usunięcia, to jest to oczekiwane zachowanie. Operacja zakończona sukcesem.
                 return true;
             }
         }

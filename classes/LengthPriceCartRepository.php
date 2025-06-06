@@ -112,13 +112,6 @@ class LengthPriceCartRepository
             return false;
         }
 
-        // Znajdź wpis w ps_customized_data stworzony przez PrestaShop
-        // PrestaShop używa `index` jako ID pola personalizacji i `type` = 0 dla pól tekstowych z formularza
-        // lub `type` = 1 dla plików. Dla pól tekstowych `type` = Product::CUSTOMIZE_TEXTFIELD (czyli 1)
-        // jest używane przy tworzeniu pola, ale w `customized_data` `type` = 0 dla wartości tekstowych.
-        // Sprawdźmy, jak PrestaShop zapisuje to dla Twojego pola.
-        // Najbezpieczniej jest polegać na id_customization i id_customization_field (index).
-
         $result = $this->db->update(
             'customized_data',
             ['lengthprice_data' => pSQL($jsonData)],

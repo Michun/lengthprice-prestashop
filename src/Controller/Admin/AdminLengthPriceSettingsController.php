@@ -3,8 +3,6 @@
 namespace PrestaShop\Module\LengthPrice\Controller\Admin;
 
 use PrestaShop\Module\LengthPrice\Service\LengthPriceProductSettingsService;
-use Tools;
-use Validate;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,19 +26,12 @@ class AdminLengthPriceSettingsController extends FrameworkBundleAdminController
         $this->moduleInstance = $moduleInstance;
         $this->settingsService = $settingsService;
         $this->translator = $translator;
-
-        $this->moduleInstance->logToFile('[AdminLengthPriceSettingsController] CONSTRUCTOR CALLED.');
     }
-
 
     public function saveProductSettingsAction(Request $request): JsonResponse
     {
-        $this->moduleInstance->logToFile('[AdminLengthPriceSettingsController] saveProductSettingsAction CALLED.');
-
         $productId = (int)$request->request->get('id_product');
         $isEnabled = (bool)$request->request->get('lengthprice_enabled');
-
-        $this->moduleInstance->logToFile("[AdminLengthPriceSettingsController] Received Product ID: {$productId}, isEnabled: " . ($isEnabled ? 'true' : 'false'));
 
         if (!$productId) {
             return new JsonResponse([
@@ -63,6 +54,4 @@ class AdminLengthPriceSettingsController extends FrameworkBundleAdminController
             ]);
         }
     }
-
 }
-    

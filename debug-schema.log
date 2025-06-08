@@ -82,3 +82,27 @@
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         
 [2025-06-06 15:21:28] [Schema] Schema installed successfully.
+[2025-06-08 20:04:20] [Schema] Attempting to uninstall schema.
+[2025-06-08 20:04:20] [Schema] SQL for uninstall: DROP TABLE IF EXISTS `ps_lengthprice_product_settings`;
+[2025-06-08 20:04:20] [Schema] Schema uninstalled successfully.
+[2025-06-08 20:05:16] [Schema] Attempting to install schema.
+[2025-06-08 20:05:16] [Schema] SQL for install: 
+            CREATE TABLE IF NOT EXISTS `ps_lengthprice_product_settings` (
+              `id_product` int(10) UNSIGNED NOT NULL,
+              `is_enabled` tinyint(1) UNSIGNED NOT NULL DEFAULT 0,
+              PRIMARY KEY (`id_product`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        
+[2025-06-08 20:05:16] [Schema] Schema installed successfully.
+[2025-06-09 00:45:44] [Schema] Attempting to uninstall schema.
+[2025-06-09 00:45:44] [Schema] SQL for uninstall: DROP TABLE IF EXISTS `ps_lengthprice_product_settings`;
+[2025-06-09 00:45:44] [Schema] Schema uninstalled successfully.
+[2025-06-09 00:45:45] [Schema] Attempting to install schema.
+[2025-06-09 00:45:45] [Schema] SQL for install: 
+            CREATE TABLE IF NOT EXISTS `ps_lengthprice_product_settings` (
+              `id_product` int(10) UNSIGNED NOT NULL,
+              `is_enabled` tinyint(1) UNSIGNED NOT NULL DEFAULT 0,
+              PRIMARY KEY (`id_product`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        
+[2025-06-09 00:45:45] [Schema] Schema installed successfully.

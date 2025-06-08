@@ -11,7 +11,14 @@
     <span class="ms-2">mm</span>
   </div>
 </div>
+{* Ukryte pole dla typu personalizacji - PrestaShop używa tego do identyfikacji typu pola *}
 <input type="hidden"
-       name="product_customization[{$customization_field_id}]"
+       name="product_customization[{$customization_field_id}][0][type]"
        id="length_customization_hidden"
+       value="1" />
+
+{* Ukryte pole dla wartości personalizacji - to będzie odczytywane przez Twoje nadpisanie *}
+<input type="hidden"
+       name="product_customization[{$customization_field_id}][0][value]"
+       id="length_customization_hidden_value" {* Zmienione ID dla jasności *}
        value="" />

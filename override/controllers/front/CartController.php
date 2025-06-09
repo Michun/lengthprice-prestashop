@@ -41,7 +41,6 @@ class CartController extends CartControllerCore
                         }
                     }
 
-                    // Obliczanie ceny docelowej (bez podatku)
                     $baseProductPriceExclTax = Product::getPriceStatic(
                         (int)$id_product, false, null, 6, null, false, true, 1, false,
                         null, null, null, $specificPriceOutput_dummy, false, true, $this->context, true
@@ -117,10 +116,7 @@ class CartController extends CartControllerCore
                         );
 
                         if ($new_customization_id) {
-                            // Ustaw $this->customization_id, aby PrestaShop poprawnie przetworzył dodanie do koszyka
-                            // produktu z personalizacją.
                             $this->customization_id = $new_customization_id;
-                            // Uaktualnij również $_POST i $_REQUEST, ponieważ niektóre części PrestaShop mogą z nich korzystać
                             $_POST['id_customization'] = $new_customization_id;
                             $_REQUEST['id_customization'] = $new_customization_id;
                             $module?->logToFile("[LengthPrice] CartController: Set customization_id to {$new_customization_id} for processing.");

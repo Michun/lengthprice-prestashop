@@ -1,21 +1,11 @@
 <?php
-// modules/lengthprice/classes/Schema.php
 
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-/**
- * Class Schema
- * Handles database schema installation and uninstallation for the LengthPrice module.
- */
 class Schema
 {
-    /**
-     * Returns the SQL for creating the module's settings table.
-     *
-     * @return string
-     */
     private function getInstallSql(): string
     {
         return '
@@ -27,61 +17,37 @@ class Schema
         ';
     }
 
-    /**
-     * Returns the SQL for dropping the module's settings table.
-     *
-     * @return string
-     */
     private function getUninstallSql(): string
     {
         return 'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . 'lengthprice_product_settings`;';
     }
 
-    /**
-     * Installs the module's database schema.
-     *
-     * @return bool
-     */
     public function installSchema(): bool
     {
-        $this->logToFile('[Schema] Attempting to install schema.'); // Dodane logowanie
         $sql = $this->getInstallSql();
-        $this->logToFile('[Schema] SQL for install: ' . $sql); // Dodane logowanie
         try {
             $result = \Db::getInstance()->execute($sql);
-            if ($result) {
-                $this->logToFile('[Schema] Schema installed successfully.'); // Dodane logowanie
-            } else {
-                $this->logToFile('[Schema] Schema installation failed. DB Error: ' . \Db::getInstance()->getMsgError()); // Dodane logowanie
+            if (!$result) {
+                $this->logToFile('[Schema] Schema installation failed. DB Error: ' . \Db::getInstance()->getMsgError());
             }
             return $result;
         } catch (\Exception $e) {
-            $this->logToFile('[Schema] Schema Install Exception: ' . $e->getMessage()); // Dodane logowanie
-            // PrestaShopLogger::addLog('LengthPrice Schema Install Error: ' . $e->getMessage(), 3, null, null, null, true);
+            $this->logToFile('[Schema] Schema Install Exception: ' . $e->getMessage());
             return false;
         }
     }
 
-    /**
-     * Uninstalls the module's database schema.
-     *
-     * @return bool
-     */
     public function uninstallSchema(): bool
     {
-        $this->logToFile('[Schema] Attempting to uninstall schema.'); // Dodane logowanie
         $sql = $this->getUninstallSql();
-        $this->logToFile('[Schema] SQL for uninstall: ' . $sql); // Dodane logowanie
         try {
             $result = \Db::getInstance()->execute($sql);
-            if ($result) {
-                $this->logToFile('[Schema] Schema uninstalled successfully.'); // Dodane logowanie
-            } else {
-                $this->logToFile('[Schema] Schema uninstallation failed. DB Error: ' . \Db::getInstance()->getMsgError()); // Dodane logowanie
+            if (!$result) {
+                $this->logToFile('[Schema] Schema uninstallation failed. DB Error: ' . \Db::getInstance()->getMsgError());
             }
             return $result;
         } catch (\Exception $e) {
-            $this->logToFile('[Schema] Schema Uninstall Exception: ' . $e->getMessage()); // Dodane logowanie
+            $this->logToFile('[Schema] Schema Uninstall Exception: ' . $e->getMessage());
             return false;
         }
     }

@@ -9,11 +9,15 @@ require_once dirname(__FILE__) . '/classes/LengthPriceDbRepository.php';
 require_once dirname(__FILE__) . '/classes/LengthPriceCartRepository.php';
 require_once dirname(__FILE__) . '/src/Service/CartService.php';
 
+use PrestaShopBundle\Form\Admin\Type\SwitchType;
 use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId;
 use PrestaShop\Module\LengthPrice\Service\CartService;
+use PrestaShop\PrestaShop\Adapter\SymfonyContainer;
+
 
 class LengthPrice extends Module
 {
+
     public function __construct()
     {
         $this->name = 'lengthprice';
@@ -35,12 +39,9 @@ class LengthPrice extends Module
     {
         $schema = new Schema();
 
-        if (!parent::install()) {
-            return false;
-        }
+        if (!parent::install()) return false;
 
         if (!$this->installControllers()) {
-            $this->logToFile('[LengthPrice] BŁĄD: installControllers() failed.');
             return false;
         }
 
@@ -69,15 +70,13 @@ class LengthPrice extends Module
     public function uninstall(): bool
     {
         $schema = new Schema();
-        $success = parent::uninstall();
 
+        $success = parent::uninstall();
         if (!$success) {
-            $this->logToFile('[LengthPrice] Uninstall failed at parent::uninstall().');
             return false;
         }
 
         if (!$this->uninstallControllers()) {
-            $this->logToFile('[LengthPrice] BŁĄD: uninstallControllers() failed.');
             $success = false;
         }
 
@@ -87,26 +86,23 @@ class LengthPrice extends Module
         $success = $success && $this->unregisterHook('displayAdminProductsExtra');
 
         $success = $success && $this->removeCustomizationFieldFlag();
-        if (!$success && !$this->removeCustomizationFieldFlag()) { // Check again to log if this specific step failed
-            $this->logToFile('[LengthPrice] Uninstall failed at removeCustomizationFieldFlag().');
-        }
-
-
         $success = $success && $this->removeLengthpriceDataColumnFromCustomizedDataTable();
         $success = $success && $schema->uninstallSchema();
-        if (!$success && !$schema->uninstallSchema()) { // Check again to log if this specific step failed
-            $this->logToFile('[LengthPrice] Uninstall failed at schema->uninstallSchema().');
-        }
 
         return $success;
     }
 
+
     public function logToFile(string $message): void
     {
+        // This method is intentionally kept for potential error logging,
+        // but informational logs have been removed from its call sites.
+        // If you want to completely disable all logging, you can empty this method body.
         $logfile = _PS_MODULE_DIR_ . $this->name . '/debug.log';
         $entry = '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
         file_put_contents($logfile, $entry, FILE_APPEND);
     }
+
 
     private function addCustomizationFieldFlag(): bool
     {
@@ -122,6 +118,7 @@ class LengthPrice extends Module
         }
         return true;
     }
+
 
     private function removeCustomizationFieldFlag(): bool
     {
@@ -173,14 +170,18 @@ class LengthPrice extends Module
         $tab = new Tab();
         $tab->class_name = 'AdminLengthPriceSettings';
         $tab->module = $this->name;
-        $tab->id_parent = -1; // No parent, top level
+        $tab->id_parent = -1;
         $tab->active = 1;
         foreach (Language::getLanguages(false) as $lang) {
             $tab->name[$lang['id_lang']] = 'LengthPrice Settings';
         }
 
         try {
-            return $tab->add();
+            $result = $tab->add();
+            if (!$result) {
+                $this->logToFile('[LengthPrice] installControllers: Adding Tab FAILED - DB Error: ' . Db::getInstance()->getMsgError());
+            }
+            return $result;
         } catch (\Exception $e) {
             $this->logToFile('[LengthPrice] installControllers: Exception adding Tab: ' . $e->getMessage());
             return false;
@@ -193,7 +194,11 @@ class LengthPrice extends Module
         if ($id_tab) {
             $tab = new Tab($id_tab);
             try {
-                return $tab->delete();
+                $result = $tab->delete();
+                if (!$result) {
+                    $this->logToFile('[LengthPrice] uninstallControllers: Deleting Tab FAILED - DB Error: ' . Db::getInstance()->getMsgError());
+                }
+                return $result;
             } catch (\Exception $e) {
                 $this->logToFile('[LengthPrice] uninstallControllers: Exception deleting Tab: ' . $e->getMessage());
                 return false;
@@ -201,6 +206,7 @@ class LengthPrice extends Module
         }
         return true;
     }
+
 
     public function hookActionProductDelete(array $params): void
     {
@@ -216,6 +222,7 @@ class LengthPrice extends Module
             $productId = (int)$params['object']->id;
         }
 
+
         if ($productId) {
             if (!LengthPriceDbRepository::deleteProductLengthPriceFlag($productId)) {
                 $this->logToFile("[LengthPrice] BŁĄD: hookActionProductDelete - Failed to delete lengthprice_enabled flag for Product ID {$productId}. DB Error: " . Db::getInstance()->getMsgError());
@@ -224,6 +231,7 @@ class LengthPrice extends Module
             $this->logToFile('[LengthPrice] BŁĄD: hookActionProductDelete - Could not determine Product ID from params.');
         }
     }
+
 
     public function hookHeader(): void
     {
@@ -236,7 +244,9 @@ class LengthPrice extends Module
             }
 
             if ($idProduct > 0) {
-                if (LengthPriceDbRepository::isLengthPriceEnabledForProduct($idProduct)) {
+                $isLengthPriceEnabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($idProduct);
+
+                if ($isLengthPriceEnabled) {
                     $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($idProduct, (int)$this->context->language->id);
                     if ($customizationFieldId !== null) {
                         Media::addJsDef(['lengthpriceCustomizationFieldId' => $customizationFieldId]);
@@ -246,52 +256,66 @@ class LengthPrice extends Module
         }
     }
 
+
     public function hookDisplayProductPriceBlock(array $params): string
     {
-        if (!isset($params['type'])) {
-            return '';
+        if (isset($params['type'])) {
+            if ($params['type'] === 'after_price') {
+                $productId = 0;
+                if (isset($params['product'])) {
+                    if (isset($params['product']->id)) {
+                        $productId = (int)$params['product']->id;
+                    } elseif (is_array($params['product']) && isset($params['product']['id_product'])) {
+                        $productId = (int)$params['product']['id_product'];
+                    } elseif (is_array($params['product']) && isset($params['product']['id'])) {
+                        $productId = (int)$params['product']['id'];
+                    }
+                }
+
+                if (!$productId && isset($this->context->controller->product) && $this->context->controller->product instanceof Product && isset($this->context->controller->product->id)) {
+                    $productId = (int)$this->context->controller->product->id;
+                }
+
+                if (!$productId) {
+                    return '';
+                }
+
+                $isLengthPriceEnabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($productId);
+                if (!$isLengthPriceEnabled) {
+                    return '';
+                }
+
+                $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($productId, (int)$this->context->language->id);
+                if ($customizationFieldId === null) {
+                    return '';
+                }
+
+                $price_per_unit = Product::getPriceStatic($productId, true, null, 6);
+
+                $this->context->smarty->assign([
+                    'price_per_unit' => $price_per_unit,
+                    'customization_field_id' => $customizationFieldId,
+                ]);
+                return $this->fetch('module:' . $this->name . '/views/templates/hook/lengthprice.tpl');
+            }
         }
 
-        if ($params['type'] === 'after_price') {
-            $productId = 0;
-            if (isset($params['product'])) {
-                // Standard Product object or array from product list
-                if (isset($params['product']->id)) { // Product object
-                    $productId = (int)$params['product']->id;
-                } elseif (is_array($params['product']) && isset($params['product']['id_product'])) { // Array from product list
-                    $productId = (int)$params['product']['id_product'];
-                } elseif (is_array($params['product']) && isset($params['product']['id'])) { // Fallback for 'id' key
-                    $productId = (int)$params['product']['id'];
-                }
+        $shouldRenderCustomizationLine = false;
+        $i = 0;
+        foreach (debug_backtrace() as $debug) {
+            if (isset($debug['file']) && (strpos($debug['file'], 'cartmodal.tpl.php') > 0
+                    || strpos($debug['file'], 'cart-summary-product-line.tpl.php') > 0
+                    || strpos($debug['file'], 'cart-detailed-product-line.tpl') > 0
+                    || strpos($debug['file'], 'module.posshoppingcartmodal.tpl') > 0)) {
+                $shouldRenderCustomizationLine = true;
             }
-
-            // Fallback for controller context if not found in params
-            if (!$productId && isset($this->context->controller->product) && $this->context->controller->product instanceof Product && isset($this->context->controller->product->id)) {
-                $productId = (int)$this->context->controller->product->id;
+            if ($i > 10) {
+                break;
             }
+            ++$i;
+        }
 
-            if (!$productId) {
-                return '';
-            }
-
-            if (!LengthPriceDbRepository::isLengthPriceEnabledForProduct($productId)) {
-                return '';
-            }
-
-            $customizationFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($productId, (int)$this->context->language->id);
-            if ($customizationFieldId === null) {
-                return '';
-            }
-
-            $price_per_unit = Product::getPriceStatic($productId, true, null, 6);
-
-            $this->context->smarty->assign([
-                'price_per_unit' => $price_per_unit,
-                'customization_field_id' => $customizationFieldId,
-            ]);
-            return $this->fetch('module:' . $this->name . '/views/templates/hook/lengthprice.tpl');
-
-        } elseif ($params['type'] === 'customization') {
+        if ($shouldRenderCustomizationLine) {
             if (isset($params['product'])) {
                 try {
                     $cartService = new CartService(
@@ -301,11 +325,12 @@ class LengthPrice extends Module
                     );
                     return $cartService->renderLengthPriceCustomizationForCart($params['product']);
                 } catch (\Throwable $e) {
-                    $this->logToFile('[LengthPrice] hookDisplayProductPriceBlock (customization) - Error: ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString());
+                    $this->logToFile('[LengthPrice] hookDisplayProductPriceBlock - Error manually instantiating or using CartService: ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString());
                     return '';
                 }
+            } else {
+                return '';
             }
-            return '';
         }
         return '';
     }
@@ -319,6 +344,7 @@ class LengthPrice extends Module
         }
 
         $lengthprice_enabled = LengthPriceDbRepository::isLengthPriceEnabledForProduct($id_product);
+
         $router = $this->get('router');
         $ajaxUrl = $router->generate('lengthprice_admin_save_settings');
 

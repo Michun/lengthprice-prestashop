@@ -6,7 +6,7 @@ namespace PrestaShop\Module\LengthPrice\Service;
 
 use Db;
 use Language;
-use LengthPrice; // Główna klasa modułu
+use LengthPrice;
 use LengthPriceCartRepository;
 use LengthPriceDbRepository;
 use Context;

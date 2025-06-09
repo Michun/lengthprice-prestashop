@@ -1,5 +1,4 @@
 <?php
-// /modules/lengthprice/classes/LengthPriceCartRepository.php
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -30,8 +29,15 @@ class LengthPriceCartRepository
         return '';
     }
 
-    public function addCustomizationForLength(int $idCart, int $idProduct, int $idProductAttribute, string $lengthValue, int $idShop, int $idModule): int|false
-    {
+    public function addCustomizationForLength(
+        int $idCart,
+        int $idProduct,
+        int $idProductAttribute,
+        string $lengthValue,
+        int $idShop,
+        int $idModule,
+        float $finalCalculatedPriceExclTax
+    ): int|false {
         $idCustomizationField = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($idProduct, (int)Context::getContext()->language->id);
 
         if (!$idCustomizationField) {
@@ -53,14 +59,18 @@ class LengthPriceCartRepository
         }
         $newIdCustomization = (int)$customization->id;
 
-        $structuredData = ['length' => $lengthValue];
+        $structuredData = [
+            'length' => $lengthValue,
+            'calculated_price_excl_tax_at_add' => $finalCalculatedPriceExclTax
+        ];
 
         $dataToInsert = [
             'id_customization' => $newIdCustomization,
-            'type'             => 1,
+            'type'             => Product::CUSTOMIZE_TEXTFIELD,
             'index'            => $idCustomizationField,
             'value'            => pSQL($lengthValue),
             'id_module'        => 0,
+            'price'            => (float)$finalCalculatedPriceExclTax,
             'lengthprice_data' => pSQL(json_encode($structuredData))
         ];
 
@@ -88,7 +98,7 @@ class LengthPriceCartRepository
         return (bool)$this->db->update(
             'customized_data',
             ['lengthprice_data' => pSQL($jsonData)],
-            '`id_customization` = ' . (int)$idCustomization . ' AND `index` = ' . (int)$idCustomizationField . ' AND `type` = 1',
+            '`id_customization` = ' . (int)$idCustomization . ' AND `index` = ' . (int)$idCustomizationField . ' AND `type` = ' . (int)Product::CUSTOMIZE_TEXTFIELD,
             1
         );
     }
@@ -101,7 +111,7 @@ class LengthPriceCartRepository
         $query->where('cd.id_customization = ' . (int)$idCustomization);
         $query->where('cd.index = ' . (int)$idCustomizationField);
         $query->where('cd.lengthprice_data IS NOT NULL');
-        $query->where('cd.type = 1');
+        $query->where('cd.type = ' . (int)Product::CUSTOMIZE_TEXTFIELD);
 
         $jsonData = $this->db->getValue($query);
 

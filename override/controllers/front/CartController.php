@@ -40,18 +40,14 @@ class CartController extends CartControllerCore
                             }
                         }
                     }
+                    $product = new \Product($id_product, null, null, $this->context->shop->id);
+                    $baseProductPriceInclTax = $product->price;
 
-                    $baseProductPriceExclTax = Product::getPriceStatic(
-                        (int)$id_product, false, null, 6, null, false, true, 1, false,
-                        null, null, null, $specificPriceOutput_dummy, false, true, $this->context, true
-                    );
-
-                    if ($baseProductPriceExclTax === null || $baseProductPriceExclTax < 0) {
-                        $module?->logToFile("[LengthPrice] CartController Error: Could not retrieve base product price (tax_excl) for Product ID {$id_product}. Price: " . var_export($baseProductPriceExclTax, true));
+                    if ($baseProductPriceInclTax === null || $baseProductPriceInclTax < 0) {
+                        $module?->logToFile("[LengthPrice] CartController Error: Could not retrieve base product price (tax_excl) for Product ID {$id_product}. Price: " . var_export($baseProductPriceInclTax, true));
                     } else {
                         $lengthInBlocks = ceil((float)$lengthValue / 10.0);
-                        $finalCalculatedPriceExclTax = $baseProductPriceExclTax * $lengthInBlocks;
-
+                        $finalCalculatedPriceInclTax = $baseProductPriceInclTax * $lengthInBlocks;
                         $zeroingSpecificPriceConditions =
                             '`id_product` = ' . (int)$id_product .
                             ' AND `id_cart` = ' . (int)$this->context->cart->id .
@@ -89,22 +85,18 @@ class CartController extends CartControllerCore
                             $zeroSpecificPrice->reduction_type = 'amount';
                             $zeroSpecificPrice->from = '0000-00-00 00:00:00';
                             $zeroSpecificPrice->to = '0000-00-00 00:00:00';
-
                             if (!$zeroSpecificPrice->add()) {
                                 $module?->logToFile('[LengthPrice] CartController Error: Failed to add zeroing SpecificPrice for Product ID: ' . $id_product . '. Validation errors: ' . implode(", ", $zeroSpecificPrice->getValidationMessages()));
                             }
                         } else {
                             $module?->logToFile("[LengthPrice] CartController: Zeroing SpecificPrice (ID: {$existingZeroingSpId}) already exists for Product ID {$id_product}, Cart ID {$this->context->cart->id}.");
                         }
-
-                        // Krok 2: Dodaj personalizację z obliczoną ceną do customized_data
                         $cartRepo = new LengthPriceCartRepository(
                             $module,
                             Db::getInstance(),
                             _DB_PREFIX_,
                             Language::getLanguages(false)
                         );
-
                         $new_customization_id = $cartRepo->addCustomizationForLength(
                             (int)$this->context->cart->id,
                             $id_product,
@@ -112,9 +104,8 @@ class CartController extends CartControllerCore
                             (string)$lengthValue,
                             (int)$this->context->shop->id,
                             (int)$module->id,
-                            $finalCalculatedPriceExclTax // Przekaż obliczoną cenę
+                            $finalCalculatedPriceInclTax // Przekaż obliczoną cenę
                         );
-
                         if ($new_customization_id) {
                             $this->customization_id = $new_customization_id;
                             $_POST['id_customization'] = $new_customization_id;
@@ -129,7 +120,6 @@ class CartController extends CartControllerCore
                 }
             }
         }
-
         parent::processChangeProductInCart();
     }
 }

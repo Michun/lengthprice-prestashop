@@ -39,16 +39,17 @@ class LengthPrice extends Module
     {
         $schema = new Schema();
 
-        if (!parent::install()) return false;
-
-        if (!$this->installControllers()) {
+        if (!parent::install() ||
+            !$this->registerHook('displayProductPriceBlock') ||
+            !$this->registerHook('header') ||
+            !$this->registerHook('actionProductDelete') ||
+            !$this->registerHook('displayAdminProductsExtra') ||
+            !$this->registerHook('actionValidateOrder') // Upewnij się, że ten hook jest rejestrowany
+        ) {
             return false;
         }
 
-        if (!($this->registerHook('displayProductPriceBlock')
-            && $this->registerHook('header')
-            && $this->registerHook('actionProductDelete')
-            && $this->registerHook('displayAdminProductsExtra'))) {
+        if (!$this->installControllers()) {
             return false;
         }
 
@@ -70,11 +71,7 @@ class LengthPrice extends Module
     public function uninstall(): bool
     {
         $schema = new Schema();
-
         $success = parent::uninstall();
-        if (!$success) {
-            return false;
-        }
 
         if (!$this->uninstallControllers()) {
             $success = false;
@@ -84,12 +81,160 @@ class LengthPrice extends Module
         $success = $success && $this->unregisterHook('header');
         $success = $success && $this->unregisterHook('actionProductDelete');
         $success = $success && $this->unregisterHook('displayAdminProductsExtra');
+        $success = $success && $this->unregisterHook('actionValidateOrder'); // Upewnij się, że ten hook jest odrejestrowywany
 
         $success = $success && $this->removeCustomizationFieldFlag();
         $success = $success && $this->removeLengthpriceDataColumnFromCustomizedDataTable();
         $success = $success && $schema->uninstallSchema();
 
         return $success;
+    }
+
+    public function hookActionValidateOrder(array $params): void
+    {
+        /** @var \Order $order */
+        $order = $params['order'];
+        /** @var \Cart $cart */
+        $cart = $params['cart'];
+
+        if (!Validate::isLoadedObject($order) || !Validate::isLoadedObject($cart)) {
+            $this->logToFile('[LengthPrice] hookActionValidateOrder: Order or Cart object not loaded for Order ID: ' . ($order->id ?? 'N/A'));
+            return;
+        }
+
+        $cartProducts = $cart->getProducts(true);
+        if (empty($cartProducts)) {
+            $this->logToFile('[LengthPrice] hookActionValidateOrder: No products found in cart ID ' . $cart->id . ' for Order ID ' . $order->id);
+            return;
+        }
+
+        $processedOrderDetails = []; // Tablica do śledzenia przetworzonych ID OrderDetail
+
+        foreach ($cartProducts as $cartProduct) {
+            if (empty($cartProduct['id_customization']) || !LengthPriceDbRepository::isLengthPriceEnabledForProduct((int)$cartProduct['id_product'])) {
+                // Jeśli brak id_customization w linii cart_product lub moduł nie jest włączony dla produktu, pomiń.
+                // $cartProduct['id_customization'] pochodzi z ps_cart_product.id_customization
+                continue;
+            }
+
+            $id_customization_from_cart_product_line = (int)$cartProduct['id_customization'];
+
+            $lengthPriceFieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct(
+                (int)$cartProduct['id_product'],
+                (int)$this->context->language->id
+            );
+
+            if ($lengthPriceFieldId === null) {
+                // Nie znaleziono pola personalizacji długości dla tego produktu
+                $this->logToFile('[LengthPrice] hookActionValidateOrder: LengthPrice field ID not found for Product ID ' . $cartProduct['id_product'] . ' with id_customization ' . $id_customization_from_cart_product_line);
+                continue;
+            }
+
+            $sql = new DbQuery();
+            $sql->select('*');
+            $sql->from('customized_data');
+            $sql->where('id_customization = ' . (int)$id_customization_from_cart_product_line);
+            $customizedDataFields = Db::getInstance()->executeS($sql);
+
+            if (empty($customizedDataFields)) {
+                $this->logToFile('[LengthPrice] hookActionValidateOrder: No customized_data found for id_customization ' . $id_customization_from_cart_product_line . ' (linked from cart_product).');
+                continue;
+            }
+
+            $foundLengthPriceCustomization = false;
+            $original_length_mm_text = null;
+            $price_for_original_length_excl_tax = 0; // Zmieniono z null na 0 dla spójności
+
+            foreach ($customizedDataFields as $field) {
+                // W tabeli customized_data, 'index' odpowiada 'id_customization_field'
+                if ((int)$field['type'] === Product::CUSTOMIZE_TEXTFIELD && (int)$field['index'] === $lengthPriceFieldId) {
+                    $original_length_mm_text = $field['value'];
+                    // Pole 'price' w tabeli customized_data jest ceną jednostkową netto ustawioną przez Twój moduł
+                    $price_for_original_length_excl_tax = (float)$field['price'];
+                    $foundLengthPriceCustomization = true;
+                    break; // Znaleziono pole długości, można przerwać pętlę po polach
+                }
+            }
+
+            if (!$foundLengthPriceCustomization || $original_length_mm_text === null || !is_numeric($original_length_mm_text)) {
+                $this->logToFile('[LengthPrice] hookActionValidateOrder: Invalid or missing length for id_customization ' . $id_customization_from_cart_product_line . '. Length text: "' . $original_length_mm_text . '"');
+                continue;
+            }
+
+            if ($price_for_original_length_excl_tax <= 0) {
+                // Ten warunek może być zbyt restrykcyjny, jeśli długość może rzeczywiście skutkować ceną zero.
+                // Jednak dla produktów wycenianych, jest to dobre sprawdzenie.
+                $this->logToFile('[LengthPrice] hookActionValidateOrder: Could not find valid unit price (<=0) in customized_data for id_customization ' . $id_customization_from_cart_product_line . ' for Order ID ' . $order->id . '. Price found: ' . $price_for_original_length_excl_tax);
+                continue;
+            }
+
+            // Reszta logiki dopasowywania OrderDetail i aktualizacji...
+            // Pamiętaj, aby używać $price_for_original_length_excl_tax do porównania z $odData['unit_price_tax_excl']
+
+            $orderDetailList = $order->getOrderDetailList();
+            foreach ($orderDetailList as $odData) {
+                if (in_array((int)$odData['id_order_detail'], $processedOrderDetails)) {
+                    continue;
+                }
+
+                if ((int)$odData['product_id'] === (int)$cartProduct['id_product'] &&
+                    (int)$odData['product_attribute_id'] === (int)$cartProduct['id_product_attribute'] &&
+                    (int)$odData['product_quantity'] === (int)$cartProduct['cart_quantity']
+                ) {
+                    $orderDetail = new OrderDetail((int)$odData['id_order_detail']);
+                    if (!Validate::isLoadedObject($orderDetail)) {
+                        continue;
+                    }
+
+                    // ... (reszta Twojej logiki aktualizacji OrderDetail, tak jak poprzednio) ...
+                    // np. obliczanie $new_product_quantity, $new_unit_price_tax_excl itd.
+
+                    $original_length_mm = (float)$original_length_mm_text;
+                    $original_order_detail_quantity = (int)$orderDetail->product_quantity;
+
+                    $rounded_length_cm_per_item = ceil($original_length_mm / 10.0);
+                    $new_product_quantity = $original_order_detail_quantity * $rounded_length_cm_per_item;
+
+                    if ($new_product_quantity <= 0) {
+                        $this->logToFile('[LengthPrice] hookActionValidateOrder: Calculated new_product_quantity is zero or less for OrderDetail ID ' . $orderDetail->id . '. Skipping.');
+                        continue;
+                    }
+
+                    $original_total_price_tax_excl = (float)$orderDetail->total_price_tax_excl;
+                    $original_total_price_tax_incl = (float)$orderDetail->total_price_tax_incl;
+
+                    $new_unit_price_tax_excl = $original_total_price_tax_excl / $new_product_quantity;
+                    $new_unit_price_tax_incl = $original_total_price_tax_incl / $new_product_quantity;
+
+                    $annotation_details = sprintf(
+                        $this->l('%d pcs x %.1f cm/pc', 'lengthprice'),
+                        $original_order_detail_quantity,
+                        ($original_length_mm / 10)
+                    );
+                    $annotation_suffix = sprintf(" (%s)", $annotation_details);
+
+                    $baseProductName = $orderDetail->product_name;
+                    $pattern = '/ \(' . preg_quote($this->l('%d pcs x %.1f cm/pc', 'lengthprice'), '/') . '\)$/u';
+                    $pattern = str_replace(['%d', '%.1f', '%s'], ['[0-9]+', '[0-9\.]+', '.+'], $pattern);
+                    $baseProductName = preg_replace($pattern, '', $baseProductName);
+                    $modifiedProductName = $baseProductName . $this->l(' (unit: cm)', 'lengthprice') . $annotation_suffix;
+
+                    $orderDetail->product_name = $modifiedProductName;
+                    $orderDetail->product_quantity = (int)$new_product_quantity;
+                    $orderDetail->unit_price_tax_excl = (float)$new_unit_price_tax_excl;
+                    $orderDetail->unit_price_tax_incl = (float)$new_unit_price_tax_incl;
+
+                    if (!$orderDetail->update()) {
+                        $this->logToFile('[LengthPrice] hookActionValidateOrder: Failed to update OrderDetail ID ' . $orderDetail->id . ' for Order ID ' . $order->id . '. Errors: ' . implode(", ", $orderDetail->getValidationMessages()));
+                    } else {
+                        $this->logToFile('[LengthPrice] hookActionValidateOrder: Successfully updated OrderDetail ID ' . $orderDetail->id . ' for Order ID ' . $order->id . '. New Qty: ' . $new_product_quantity . ', New Unit Price Excl: ' . $new_unit_price_tax_excl . ', New Name: ' . $orderDetail->product_name);
+                        $processedOrderDetails[] = (int)$orderDetail->id;
+                    }
+                    break;
+                }
+            }
+        }
+
     }
 
 

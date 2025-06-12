@@ -130,11 +130,7 @@ class LengthPrice extends Module
                 continue;
             }
 
-            $sql = new DbQuery();
-            $sql->select('*');
-            $sql->from('customized_data');
-            $sql->where('id_customization = ' . (int)$id_customization_from_cart_product_line);
-            $customizedDataFields = Db::getInstance()->executeS($sql);
+            $customizedDataFields = LengthPriceDbRepository::getCustomizedDataFieldsByIdCustomization($id_customization_from_cart_product_line);
 
             if (empty($customizedDataFields)) {
                 $this->logToFile('[LengthPrice] hookActionValidateOrder: No customized_data found for id_customization ' . $id_customization_from_cart_product_line . ' (linked from cart_product).');
@@ -248,36 +244,27 @@ class LengthPrice extends Module
         file_put_contents($logfile, $entry, FILE_APPEND);
     }
 
-
     private function addCustomizationFieldFlag(): bool
     {
-        $tableName = 'customization_field';
-        $columnName = 'is_lengthprice';
-        if (!LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $sql = LengthPriceDbRepository::getAddColumnSql($tableName, $columnName, 'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0');
-            $result = Db::getInstance()->execute($sql);
-            if (!$result) {
-                $this->logToFile("[LengthPrice] addCustomizationFieldFlag: ALTER TABLE FAILED - DB Error: " . Db::getInstance()->getMsgError());
-            }
-            return (bool)$result;
+        $result = LengthPriceDbRepository::addColumnIfNotExists(
+            'customization_field',
+            'is_lengthprice',
+            'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0'
+        );
+        if (!$result) {
+            $this->logToFile("[LengthPrice] addCustomizationFieldFlag: Adding column failed.");
         }
-        return true;
+        return $result;
     }
-
 
     private function removeCustomizationFieldFlag(): bool
     {
-        $tableName = 'customization_field';
-        $columnName = 'is_lengthprice';
-        if (LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $sql = LengthPriceDbRepository::getDropColumnSql($tableName, $columnName);
-            $result = Db::getInstance()->execute($sql);
-            if (!$result) {
-                $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: ALTER TABLE DROP COLUMN FAILED - DB Error: " . Db::getInstance()->getMsgError());
-            }
-            return (bool)$result;
+        $result = LengthPriceDbRepository::markAndDeleteLengthPriceCustomizationFlag([$this, 'logToFile']);
+
+        if (!$result) {
+            $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: The process of marking fields as deleted and/or dropping the 'is_lengthprice' column encountered an issue. Check repository logs.");
         }
-        return true;
+        return $result;
     }
 
     private function addLengthpriceDataColumnToCustomizedDataTable(): bool

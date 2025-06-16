@@ -206,23 +206,25 @@ class LengthPrice extends Module
 
 
                     $annotation_details = sprintf(
-                        $this->l('%d pcs x %.1f mm/pc', 'lengthprice'),
+                        $this->l('%d pcs x %.0f mm/pc', 'lengthprice'),
                         $original_order_detail_quantity,
-                        ($original_length_mm)
+                        $original_length_mm
                     );
                     $annotation_suffix = sprintf(" (%s)", $annotation_details);
 
                     $baseProductName = $orderDetail->product_name;
-                    $pattern = '/ \(' . preg_quote($this->l('%d pcs x %.1f cm/pc', 'lengthprice'), '/') . '\)$/u';
-                    $pattern = str_replace(['%d', '%.1f', '%s'], ['[0-9]+', '[0-9\.]+', '.+'], $pattern);
+                    $pattern = '/ \(' . preg_quote($this->l('%d pcs x %f cm/pc', 'lengthprice'), '/') . '\)$/u';
+                    $pattern = str_replace(['%d', '%.0f', '%s'], ['[0-9]+', '[0-9]+', '.+'], $pattern);
                     $baseProductName = preg_replace($pattern, '', $baseProductName);
-                    $modifiedProductName = $baseProductName . $this->l(' (unit: cm)', 'lengthprice') . $annotation_suffix;
+                    $modifiedProductName = $baseProductName . $this->l(' (unit: mm)', 'lengthprice') . $annotation_suffix;
 
                     $orderDetail->product_name = $modifiedProductName;
                     $orderDetail->product_quantity_in_stock = (int)$new_product_quantity;
                     $orderDetail->product_quantity = (int)$new_product_quantity;
                     $orderDetail->unit_price_tax_excl = (float)$new_unit_price_tax_excl;
                     $orderDetail->unit_price_tax_incl = (float)$new_unit_price_tax_incl;
+                    $orderDetail->id_customization = 0;
+
 
                     if (!$orderDetail->update()) {
                         $this->logToFile('[LengthPrice] hookActionValidateOrder: Failed to update OrderDetail ID ' . $orderDetail->id . ' for Order ID ' . $order->id . '. Errors: ' . implode(", ", $orderDetail->getValidationMessages()));

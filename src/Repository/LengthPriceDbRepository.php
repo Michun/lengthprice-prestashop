@@ -1,6 +1,10 @@
 <?php
 // modules/lengthprice/classes/LengthPriceDbRepository.php
 
+namespace PrestaShop\Module\LengthPrice\Repository;
+use Db;
+use DbQuery;
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }

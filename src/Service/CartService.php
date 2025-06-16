@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace PrestaShop\Module\LengthPrice\Service;
 
+use Context;
 use Db;
 use Language;
 use LengthPrice;
 use LengthPriceCartRepository;
-use LengthPriceDbRepository;
-use Context;
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
 
 if (!defined('_PS_VERSION_')) {
     exit;

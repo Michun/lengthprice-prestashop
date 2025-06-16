@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace PrestaShop\Module\LengthPrice\Service;
 
 use CustomizationField;
+use Db;
 use Language;
 use Product;
-use LengthPriceDbRepository;
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
 use Validate;
-use Db;
 
 if (!defined('_PS_VERSION_')) {
     exit;

@@ -5,15 +5,14 @@ if (!defined('_PS_VERSION_')) {
 }
 
 require_once dirname(__FILE__) . '/classes/Schema.php';
-require_once dirname(__FILE__) . '/classes/LengthPriceDbRepository.php';
 require_once dirname(__FILE__) . '/classes/LengthPriceCartRepository.php';
 require_once dirname(__FILE__) . '/src/Service/CartService.php';
 
-use PrestaShopBundle\Form\Admin\Type\SwitchType;
-use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId;
 use PrestaShop\Module\LengthPrice\Service\CartService;
-use PrestaShop\PrestaShop\Adapter\SymfonyContainer;
+use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId;
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
 
+require_once __DIR__ . '/vendor/autoload.php';
 
 class LengthPrice extends Module
 {
@@ -199,8 +198,14 @@ class LengthPrice extends Module
                     $original_total_price_tax_excl = (float)$orderDetail->total_price_tax_excl;
                     $original_total_price_tax_incl = (float)$orderDetail->total_price_tax_incl;
 
-                    $new_unit_price_tax_excl = $original_total_price_tax_excl / $new_product_quantity;
-                    $new_unit_price_tax_incl = $original_total_price_tax_incl / $new_product_quantity;
+                    // $new_unit_price_tax_excl = $original_total_price_tax_excl / $new_product_quantity;
+                    // $new_unit_price_tax_incl = $original_total_price_tax_incl / $new_product_quantity;
+
+                    $original_product_price = $orderDetail->original_product_price;
+                    $tax_rate = $orderDetail->tax_rate;
+                    $new_unit_price_tax_excl = $original_product_price;
+                    $new_unit_price_tax_incl = $original_product_price * (1 + $tax_rate/100);
+
 
                     $annotation_details = sprintf(
                         $this->l('%d pcs x %.1f cm/pc', 'lengthprice'),
@@ -216,6 +221,7 @@ class LengthPrice extends Module
                     $modifiedProductName = $baseProductName . $this->l(' (unit: cm)', 'lengthprice') . $annotation_suffix;
 
                     $orderDetail->product_name = $modifiedProductName;
+                    $orderDetail->product_quantity_in_stock = (int)$new_product_quantity;
                     $orderDetail->product_quantity = (int)$new_product_quantity;
                     $orderDetail->unit_price_tax_excl = (float)$new_unit_price_tax_excl;
                     $orderDetail->unit_price_tax_incl = (float)$new_unit_price_tax_incl;

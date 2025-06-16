@@ -1,11 +1,12 @@
 <?php
 
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
 require_once _PS_MODULE_DIR_ . 'lengthprice/classes/LengthPriceCartRepository.php';
-require_once _PS_MODULE_DIR_ . 'lengthprice/classes/LengthPriceDbRepository.php';
 
 class CartController extends CartControllerCore
 {

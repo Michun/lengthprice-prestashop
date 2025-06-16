@@ -1,5 +1,7 @@
 <?php
 
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -48,7 +50,7 @@ class LengthPriceCartRepository
         $customization->id_cart = $idCart;
         $customization->id_product = $idProduct;
         $customization->id_product_attribute = $idProductAttribute;
-        $customization->quantity = 1;
+        $customization->quantity = 0;
         $customization->id_address_delivery = (int)Context::getContext()->cart->id_address_delivery;
         $customization->in_cart = 1;
         $customization->quantity_refunded = 0;

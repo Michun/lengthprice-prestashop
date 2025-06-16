@@ -1,17 +1,38 @@
 {
-  "name": "prestashop/lengthprice",
+  "name": "yourvendor/lengthprice",
+  "description": "Calculate price based on length.",
+  "type": "prestashop-module",
+  "license": "AFL-3.0",
   "authors": [
     {
-      "name": "Michał Nowacki"
+      "name": "Michał Nowacki",
+      "email": "your-email@example.com"
     }
   ],
+  "require": {
+    "php": ">=7.2.5"
+  },
   "autoload": {
     "psr-4": {
-      "PrestaShop\\Module\\LengthPrice\\": "src/"
-    }
+      "PrestaShop\\Module\\LengthPrice\\": "src"
+    },
+    "type": "prestashop-module"
   },
   "config": {
+    "preferred-install": "dist",
     "prepend-autoloader": false
   },
-  "type": "prestashop-module"
+  "extra": {
+    "prestashop": {
+      "displayName": "Price per Length",
+      "description": "Calculate price based on length.",
+      "version": "0.0.1",
+      "author": "Michał Nowacki",
+      "tab": "other",
+      "compatibility": {
+        "min": "8.0.0",
+        "max": null
+      }
+    }
+  }
 }

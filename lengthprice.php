@@ -5,7 +5,6 @@ if (!defined('_PS_VERSION_')) {
 }
 
 require_once dirname(__FILE__) . '/classes/Schema.php';
-require_once dirname(__FILE__) . '/classes/LengthPriceCartRepository.php';
 require_once dirname(__FILE__) . '/src/Service/CartService.php';
 
 use PrestaShop\Module\LengthPrice\Service\CartService;

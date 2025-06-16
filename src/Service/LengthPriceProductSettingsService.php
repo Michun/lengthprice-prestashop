@@ -53,6 +53,7 @@ class LengthPriceProductSettingsService
                 $cf->id_product = $productId;
                 $cf->type = Product::CUSTOMIZE_TEXTFIELD;
                 $cf->required = 1;
+                $cf->is_module = 1;
 
                 foreach ($languages as $lang) {
                     $cf->name[$lang['id_lang']] = $this->module->l('Length (mm)');

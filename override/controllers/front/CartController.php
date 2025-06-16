@@ -1,12 +1,13 @@
 <?php
 
 use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceCartRepository;
 
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once _PS_MODULE_DIR_ . 'lengthprice/classes/LengthPriceCartRepository.php';
+//require_once _PS_MODULE_DIR_ . 'lengthprice/classes/LengthPriceCartRepository.php';
 
 class CartController extends CartControllerCore
 {
@@ -56,7 +57,7 @@ class CartController extends CartControllerCore
                             ' AND `reduction` = 0' .
                             ' AND `from_quantity` = 1' .
                             ' AND `id_specific_price_rule` = 0' .
-                            ' AND `id_product_attribute` = 0'; // Dla produktu bazowego
+                            ' AND `id_product_attribute` = 0';
 
                         $existingZeroingSpId = Db::getInstance()->getValue(
                             'SELECT `id_specific_price` FROM `' . _DB_PREFIX_ . 'specific_price` WHERE ' . $zeroingSpecificPriceConditions
@@ -72,7 +73,7 @@ class CartController extends CartControllerCore
 
                             $zeroSpecificPrice = new SpecificPrice();
                             $zeroSpecificPrice->id_product = (int)$id_product;
-                            $zeroSpecificPrice->id_product_attribute = 0; // Dla produktu bazowego
+                            $zeroSpecificPrice->id_product_attribute = 0;
                             $zeroSpecificPrice->id_shop = (int)$this->context->shop->id;
                             $zeroSpecificPrice->id_currency = 0;
                             $zeroSpecificPrice->id_country = 0;
@@ -95,8 +96,6 @@ class CartController extends CartControllerCore
                         $cartRepo = new LengthPriceCartRepository(
                             $module,
                             Db::getInstance(),
-                            _DB_PREFIX_,
-                            Language::getLanguages(false)
                         );
                         $new_customization_id = $cartRepo->addCustomizationForLength(
                             (int)$this->context->cart->id,
@@ -104,8 +103,7 @@ class CartController extends CartControllerCore
                             $id_product_attribute,
                             (string)$lengthValue,
                             (int)$this->context->shop->id,
-                            (int)$module->id,
-                            $finalCalculatedPriceInclTax // Przekaż obliczoną cenę
+                            $finalCalculatedPriceInclTax
                         );
                         if ($new_customization_id) {
                             $this->customization_id = $new_customization_id;

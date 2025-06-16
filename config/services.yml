@@ -1,7 +1,7 @@
 services:
   lengthprice:
     class: LengthPrice
-    factory: ['Module', 'getInstanceByName']
+    factory: [ 'Module', 'getInstanceByName' ]
     arguments:
       - 'lengthprice'
     public: true
@@ -14,7 +14,7 @@ services:
 
   prestashop.module.lengthprice.db_instance:
     class: Db
-    factory: ['Db', 'getInstance']
+    factory: [ 'Db', 'getInstance' ]
     public: true
 
   prestashop.module.lengthprice.service.cart:
@@ -25,6 +25,13 @@ services:
       - '@prestashop.module.lengthprice.db_instance'
       - '@prestashop.adapter.legacy.context'
 
+  prestashop.module.lengthprice.repository.cart: # Nazwa serwisu
+    class: PrestaShop\Module\LengthPrice\Repository\LengthPriceCartRepository
+    public: true # lub false, jeśli tylko inne serwisy mają go używać
+    arguments:
+      - '@lengthprice' # Wstrzyknij instancję modułu (lub translator, jeśli zmienisz)
+      - '@prestashop.module.lengthprice.db_instance' # Wstrzyknij serwis Db
+
   PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController:
     class: PrestaShop\Module\LengthPrice\Controller\Admin\AdminLengthPriceSettingsController
     public: true
@@ -32,4 +39,4 @@ services:
       - '@lengthprice' # Wstrzyknij serwis modułu
       - '@prestashop.module.lengthprice.service.product_settings'
       - '@translator'
-    tags: ['controller.service_arguments']
+    tags: [ 'controller.service_arguments' ]

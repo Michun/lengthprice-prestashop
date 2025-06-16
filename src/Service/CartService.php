@@ -8,7 +8,7 @@ use Context;
 use Db;
 use Language;
 use LengthPrice;
-use LengthPriceCartRepository;
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceCartRepository;
 use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
 
 if (!defined('_PS_VERSION_')) {
@@ -76,8 +76,6 @@ class CartService
         $cartRepository = new LengthPriceCartRepository(
             $this->module,
             $this->db,
-            _DB_PREFIX_,
-            Language::getLanguages(false)
         );
 
         foreach ($customizations as $customization) {

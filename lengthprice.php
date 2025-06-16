@@ -1,15 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-require_once dirname(__FILE__) . '/classes/Schema.php';
-require_once dirname(__FILE__) . '/src/Service/CartService.php';
-
+use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
+use PrestaShop\Module\LengthPrice\Database\Schema;
 use PrestaShop\Module\LengthPrice\Service\CartService;
 use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId;
-use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
 
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -35,8 +35,6 @@ class LengthPrice extends Module
 
     public function install(): bool
     {
-        $schema = new Schema();
-
         if (!parent::install() ||
             !$this->registerHook('displayProductPriceBlock') ||
             !$this->registerHook('header') ||
@@ -44,6 +42,12 @@ class LengthPrice extends Module
             !$this->registerHook('displayAdminProductsExtra') ||
             !$this->registerHook('actionValidateOrder') // Upewnij się, że ten hook jest rejestrowany
         ) {
+            return false;
+        }
+
+        $schemaManager = new Schema(Db::getInstance(), [$this, 'logToFile']);
+        if (!$schemaManager->installSchema()) {
+            $this->_errors[] = $this->l('Failed to install database schema.');
             return false;
         }
 
@@ -59,31 +63,50 @@ class LengthPrice extends Module
             return false;
         }
 
-        if (!$schema->installSchema()) {
-            return false;
-        }
-
         return true;
     }
 
     public function uninstall(): bool
     {
-        $schema = new Schema();
-        $success = parent::uninstall();
+        $this->logToFile("Starting uninstallation process for LengthPrice module.");
+        $success = true;
 
         if (!$this->uninstallControllers()) {
+            $this->logToFile("Failed to uninstall admin controllers.");
             $success = false;
         }
 
-        $success = $success && $this->unregisterHook('displayProductPriceBlock');
-        $success = $success && $this->unregisterHook('header');
-        $success = $success && $this->unregisterHook('actionProductDelete');
-        $success = $success && $this->unregisterHook('displayAdminProductsExtra');
-        $success = $success && $this->unregisterHook('actionValidateOrder'); // Upewnij się, że ten hook jest odrejestrowywany
+        $hooksToUnregister = [
+            'displayProductPriceBlock',
+            'header',
+            'actionProductDelete',
+            'displayAdminProductsExtra',
+            'actionValidateOrder',
+        ];
+        foreach ($hooksToUnregister as $hookName) {
+            if (!$this->unregisterHook($hookName)) {
+                $this->logToFile("Failed to unregister hook: {$hookName}");
+            }
+        }
+        $this->logToFile("Hooks unregistration attempt completed.");
 
-        $success = $success && $this->setCustomizationFieldToDeleted();
-        $success = $success && $schema->uninstallSchema();
+        if (!$this->setCustomizationFieldToDeleted()) {
+            $this->logToFile("Failed during setCustomizationFieldToDeleted.");
+            $success = false;
+        }
 
+        $schemaManager = new Schema(Db::getInstance(), [$this, 'logToFile']);
+        if (!$schemaManager->uninstallSchema()) {
+            $this->logToFile("Failed to uninstall database schema (module's own tables).");
+            $success = false;
+        }
+
+        if (!parent::uninstall()) {
+            $this->logToFile("Failed during parent::uninstall().");
+            $success = false;
+        }
+
+        $this->logToFile("Uninstallation process completed. Overall success: " . ($success ? 'Yes' : 'No'));
         return $success;
     }
 
@@ -293,7 +316,9 @@ class LengthPrice extends Module
         $tab = new Tab();
         $tab->class_name = 'AdminLengthPriceSettings';
         $tab->module = $this->name;
-        $tab->id_parent = -1;
+        if (!$tab->id_parent) {
+            $tab->id_parent = -1;
+        }
         $tab->active = 1;
         foreach (Language::getLanguages(false) as $lang) {
             $tab->name[$lang['id_lang']] = 'LengthPrice Settings';

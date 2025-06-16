@@ -23,6 +23,8 @@ class ComposerStaticInitb80ff554b5e0fa6052e8964873272f60
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'PrestaShop\\Module\\LengthPrice\\Controller\\Admin\\AdminLengthPriceSettingsController' => __DIR__ . '/../..' . '/src/Controller/Admin/AdminLengthPriceSettingsController.php',
+        'PrestaShop\\Module\\LengthPrice\\Database\\Schema' => __DIR__ . '/../..' . '/src/Database/Schema.php',
+        'PrestaShop\\Module\\LengthPrice\\Repository\\LengthPriceCartRepository' => __DIR__ . '/../..' . '/src/Repository/LengthPriceCartRepository.php',
         'PrestaShop\\Module\\LengthPrice\\Repository\\LengthPriceDbRepository' => __DIR__ . '/../..' . '/src/Repository/LengthPriceDbRepository.php',
         'PrestaShop\\Module\\LengthPrice\\Service\\CartService' => __DIR__ . '/../..' . '/src/Service/CartService.php',
         'PrestaShop\\Module\\LengthPrice\\Service\\LengthPriceProductSettingsService' => __DIR__ . '/../..' . '/src/Service/LengthPriceProductSettingsService.php',

@@ -8,6 +8,8 @@ $baseDir = dirname($vendorDir);
 return array(
     'Composer\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',
     'PrestaShop\\Module\\LengthPrice\\Controller\\Admin\\AdminLengthPriceSettingsController' => $baseDir . '/src/Controller/Admin/AdminLengthPriceSettingsController.php',
+    'PrestaShop\\Module\\LengthPrice\\Database\\Schema' => $baseDir . '/src/Database/Schema.php',
+    'PrestaShop\\Module\\LengthPrice\\Repository\\LengthPriceCartRepository' => $baseDir . '/src/Repository/LengthPriceCartRepository.php',
     'PrestaShop\\Module\\LengthPrice\\Repository\\LengthPriceDbRepository' => $baseDir . '/src/Repository/LengthPriceDbRepository.php',
     'PrestaShop\\Module\\LengthPrice\\Service\\CartService' => $baseDir . '/src/Service/CartService.php',
     'PrestaShop\\Module\\LengthPrice\\Service\\LengthPriceProductSettingsService' => $baseDir . '/src/Service/LengthPriceProductSettingsService.php',

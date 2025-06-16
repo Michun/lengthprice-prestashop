@@ -90,6 +90,7 @@ class LengthPriceDbRepository
     {
         $logPrefix = '[LengthPriceDbRepository] markAndDeleteLengthPriceCustomizationFlag: ';
         $columnExists = self::columnExists('customization_field', 'is_lengthprice');
+        $markedOk = true;
 
         if ($columnExists) {
             $sqlMarkAsDeleted = 'UPDATE `' . _DB_PREFIX_ . 'customization_field`
@@ -100,6 +101,7 @@ class LengthPriceDbRepository
                     if ($logger) {
                         $logger($logPrefix . "Failed to mark lengthprice customization fields as deleted. DB Error: " . Db::getInstance()->getMsgError());
                     }
+                    $markedOk = false;
                 }
             } catch (\PrestaShopDatabaseException $e) {
                 if ($logger) {
@@ -110,14 +112,7 @@ class LengthPriceDbRepository
         } elseif ($logger) {
             $logger($logPrefix . "'is_lengthprice' column does not exist, skipping marking fields as deleted.");
         }
-
-        $dropResult = self::dropColumnIfExists('customization_field', 'is_lengthprice', $logger, $logPrefix . "Dropping 'is_lengthprice' column: ");
-
-        if (!$columnExists && $dropResult) {
-            return true;
-        }
-
-        return $dropResult; // The success of the operation now primarily depends on the column drop
+        return $markedOk;
     }
 
     public static function getLengthCustomizationFieldIdForProduct(int $idProduct, int $idLang): ?int

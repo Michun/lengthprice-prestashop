@@ -81,8 +81,7 @@ class LengthPrice extends Module
         $success = $success && $this->unregisterHook('displayAdminProductsExtra');
         $success = $success && $this->unregisterHook('actionValidateOrder'); // Upewnij się, że ten hook jest odrejestrowywany
 
-        $success = $success && $this->removeCustomizationFieldFlag();
-        $success = $success && $this->removeLengthpriceDataColumnFromCustomizedDataTable();
+        $success = $success && $this->setCustomizationFieldToDeleted();
         $success = $success && $schema->uninstallSchema();
 
         return $success;
@@ -207,9 +206,9 @@ class LengthPrice extends Module
 
 
                     $annotation_details = sprintf(
-                        $this->l('%d pcs x %.1f cm/pc', 'lengthprice'),
+                        $this->l('%d pcs x %.1f mm/pc', 'lengthprice'),
                         $original_order_detail_quantity,
-                        ($original_length_mm / 10)
+                        ($original_length_mm)
                     );
                     $annotation_suffix = sprintf(" (%s)", $annotation_details);
 
@@ -262,12 +261,12 @@ class LengthPrice extends Module
         return $result;
     }
 
-    private function removeCustomizationFieldFlag(): bool
+    private function setCustomizationFieldToDeleted(): bool
     {
         $result = LengthPriceDbRepository::markAndDeleteLengthPriceCustomizationFlag([$this, 'logToFile']);
 
         if (!$result) {
-            $this->logToFile("[LengthPrice] removeCustomizationFieldFlag: The process of marking fields as deleted and/or dropping the 'is_lengthprice' column encountered an issue. Check repository logs.");
+            $this->logToFile("[LengthPrice] setCustomizationFieldToDeleted: The process of marking fields as deleted and/or dropping the 'is_lengthprice' column encountered an issue. Check repository logs.");
         }
         return $result;
     }
@@ -281,21 +280,6 @@ class LengthPrice extends Module
             $result = Db::getInstance()->execute($sql);
             if (!$result) {
                 $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: ALTER TABLE FAILED - DB Error: " . Db::getInstance()->getMsgError());
-            }
-            return (bool)$result;
-        }
-        return true;
-    }
-
-    private function removeLengthpriceDataColumnFromCustomizedDataTable(): bool
-    {
-        $tableName = 'customized_data';
-        $columnName = 'lengthprice_data';
-        if (LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $sql = LengthPriceDbRepository::getDropColumnSql($tableName, $columnName);
-            $result = Db::getInstance()->execute($sql);
-            if (!$result) {
-                $this->logToFile("[LengthPrice] removeLengthpriceDataColumnFromCustomizedDataTable: ALTER TABLE DROP COLUMN FAILED - DB Error: " . Db::getInstance()->getMsgError());
             }
             return (bool)$result;
         }

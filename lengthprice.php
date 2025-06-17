@@ -7,8 +7,8 @@ if (!defined('_PS_VERSION_')) {
 }
 
 use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
-use PrestaShop\Module\LengthPrice\Database\Schema;
 use PrestaShop\Module\LengthPrice\Service\CartService;
+use PrestaShop\Module\LengthPrice\Setup\Installer;
 use PrestaShop\PrestaShop\Core\Domain\Product\ValueObject\ProductId;
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -40,41 +40,26 @@ class LengthPrice extends Module
             !$this->registerHook('header') ||
             !$this->registerHook('actionProductDelete') ||
             !$this->registerHook('displayAdminProductsExtra') ||
-            !$this->registerHook('actionValidateOrder') // Upewnij się, że ten hook jest rejestrowany
+            !$this->registerHook('actionValidateOrder')
         ) {
+            $this->logToFile('Moduł: Nie udało się zarejestrować podstawowych hooków.');
             return false;
         }
 
-        $schemaManager = new Schema(Db::getInstance(), [$this, 'logToFile']);
-        if (!$schemaManager->installSchema()) {
-            $this->_errors[] = $this->l('Failed to install database schema.');
+        $installer = new Installer($this, Db::getInstance());
+        if (!$installer->install()) {
+            $this->logToFile('Moduł: Instalator zwrócił błąd.');
             return false;
         }
 
-        if (!$this->installControllers()) {
-            return false;
-        }
-
-        if (!$this->addCustomizationFieldFlag()) {
-            return false;
-        }
-
-        if (!$this->addLengthpriceDataColumnToCustomizedDataTable()) {
-            return false;
-        }
-
+        $this->logToFile('Moduł: Instalacja zakończona pomyślnie.');
         return true;
     }
 
     public function uninstall(): bool
     {
-        $this->logToFile("Starting uninstallation process for LengthPrice module.");
+        $this->logToFile("Rozpoczynanie procesu deinstalacji modułu LengthPrice.");
         $success = true;
-
-        if (!$this->uninstallControllers()) {
-            $this->logToFile("Failed to uninstall admin controllers.");
-            $success = false;
-        }
 
         $hooksToUnregister = [
             'displayProductPriceBlock',
@@ -85,31 +70,25 @@ class LengthPrice extends Module
         ];
         foreach ($hooksToUnregister as $hookName) {
             if (!$this->unregisterHook($hookName)) {
-                $this->logToFile("Failed to unregister hook: {$hookName}");
+                $this->logToFile("Moduł: Nie udało się wyrejestrować hooka: {$hookName}");
             }
         }
-        $this->logToFile("Hooks unregistration attempt completed.");
+        $this->logToFile("Moduł: Próba wyrejestrowania hooków zakończona.");
 
-        if (!$this->setCustomizationFieldToDeleted()) {
-            $this->logToFile("Failed during setCustomizationFieldToDeleted.");
-            $success = false;
-        }
-
-        $schemaManager = new Schema(Db::getInstance(), [$this, 'logToFile']);
-        if (!$schemaManager->uninstallSchema()) {
-            $this->logToFile("Failed to uninstall database schema (module's own tables).");
+        $installer = new Installer($this, Db::getInstance());
+        if (!$installer->uninstall()) {
+            $this->logToFile('Moduł: Deinstalator zwrócił błąd.');
             $success = false;
         }
 
         if (!parent::uninstall()) {
-            $this->logToFile("Failed during parent::uninstall().");
+            $this->logToFile("Moduł: Wystąpił błąd podczas parent::uninstall().");
             $success = false;
         }
 
-        $this->logToFile("Uninstallation process completed. Overall success: " . ($success ? 'Yes' : 'No'));
+        $this->logToFile("Moduł: Proces deinstalacji zakończony. Ogólny sukces: " . ($success ? 'Tak' : 'Nie'));
         return $success;
     }
-
     public function hookActionValidateOrder(array $params): void
     {
         /** @var \Order $order */
@@ -128,12 +107,10 @@ class LengthPrice extends Module
             return;
         }
 
-        $processedOrderDetails = []; // Tablica do śledzenia przetworzonych ID OrderDetail
+        $processedOrderDetails = [];
 
         foreach ($cartProducts as $cartProduct) {
             if (empty($cartProduct['id_customization']) || !LengthPriceDbRepository::isLengthPriceEnabledForProduct((int)$cartProduct['id_product'])) {
-                // Jeśli brak id_customization w linii cart_product lub moduł nie jest włączony dla produktu, pomiń.
-                // $cartProduct['id_customization'] pochodzi z ps_cart_product.id_customization
                 continue;
             }
 
@@ -145,7 +122,6 @@ class LengthPrice extends Module
             );
 
             if ($lengthPriceFieldId === null) {
-                // Nie znaleziono pola personalizacji długości dla tego produktu
                 $this->logToFile('[LengthPrice] hookActionValidateOrder: LengthPrice field ID not found for Product ID ' . $cartProduct['id_product'] . ' with id_customization ' . $id_customization_from_cart_product_line);
                 continue;
             }
@@ -159,16 +135,14 @@ class LengthPrice extends Module
 
             $foundLengthPriceCustomization = false;
             $original_length_mm_text = null;
-            $price_for_original_length_excl_tax = 0; // Zmieniono z null na 0 dla spójności
+            $price_for_original_length_excl_tax = 0;
 
             foreach ($customizedDataFields as $field) {
-                // W tabeli customized_data, 'index' odpowiada 'id_customization_field'
                 if ((int)$field['type'] === Product::CUSTOMIZE_TEXTFIELD && (int)$field['index'] === $lengthPriceFieldId) {
                     $original_length_mm_text = $field['value'];
-                    // Pole 'price' w tabeli customized_data jest ceną jednostkową netto ustawioną przez Twój moduł
                     $price_for_original_length_excl_tax = (float)$field['price'];
                     $foundLengthPriceCustomization = true;
-                    break; // Znaleziono pole długości, można przerwać pętlę po polach
+                    break;
                 }
             }
 
@@ -178,14 +152,9 @@ class LengthPrice extends Module
             }
 
             if ($price_for_original_length_excl_tax <= 0) {
-                // Ten warunek może być zbyt restrykcyjny, jeśli długość może rzeczywiście skutkować ceną zero.
-                // Jednak dla produktów wycenianych, jest to dobre sprawdzenie.
                 $this->logToFile('[LengthPrice] hookActionValidateOrder: Could not find valid unit price (<=0) in customized_data for id_customization ' . $id_customization_from_cart_product_line . ' for Order ID ' . $order->id . '. Price found: ' . $price_for_original_length_excl_tax);
                 continue;
             }
-
-            // Reszta logiki dopasowywania OrderDetail i aktualizacji...
-            // Pamiętaj, aby używać $price_for_original_length_excl_tax do porównania z $odData['unit_price_tax_excl']
 
             $orderDetailList = $order->getOrderDetailList();
             foreach ($orderDetailList as $odData) {
@@ -202,9 +171,6 @@ class LengthPrice extends Module
                         continue;
                     }
 
-                    // ... (reszta Twojej logiki aktualizacji OrderDetail, tak jak poprzednio) ...
-                    // np. obliczanie $new_product_quantity, $new_unit_price_tax_excl itd.
-
                     $original_length_mm = (float)$original_length_mm_text;
                     $original_order_detail_quantity = (int)$orderDetail->product_quantity;
 
@@ -218,9 +184,6 @@ class LengthPrice extends Module
 
                     $original_total_price_tax_excl = (float)$orderDetail->total_price_tax_excl;
                     $original_total_price_tax_incl = (float)$orderDetail->total_price_tax_incl;
-
-                    // $new_unit_price_tax_excl = $original_total_price_tax_excl / $new_product_quantity;
-                    // $new_unit_price_tax_incl = $original_total_price_tax_incl / $new_product_quantity;
 
                     $original_product_price = $orderDetail->original_product_price;
                     $tax_rate = $orderDetail->tax_rate;
@@ -265,96 +228,10 @@ class LengthPrice extends Module
 
     public function logToFile(string $message): void
     {
-        // This method is intentionally kept for potential error logging,
-        // but informational logs have been removed from its call sites.
-        // If you want to completely disable all logging, you can empty this method body.
         $logfile = _PS_MODULE_DIR_ . $this->name . '/debug.log';
         $entry = '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
         file_put_contents($logfile, $entry, FILE_APPEND);
     }
-
-    private function addCustomizationFieldFlag(): bool
-    {
-        $result = LengthPriceDbRepository::addColumnIfNotExists(
-            'customization_field',
-            'is_lengthprice',
-            'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0'
-        );
-        if (!$result) {
-            $this->logToFile("[LengthPrice] addCustomizationFieldFlag: Adding column failed.");
-        }
-        return $result;
-    }
-
-    private function setCustomizationFieldToDeleted(): bool
-    {
-        $result = LengthPriceDbRepository::markAndDeleteLengthPriceCustomizationFlag([$this, 'logToFile']);
-
-        if (!$result) {
-            $this->logToFile("[LengthPrice] setCustomizationFieldToDeleted: The process of marking fields as deleted and/or dropping the 'is_lengthprice' column encountered an issue. Check repository logs.");
-        }
-        return $result;
-    }
-
-    private function addLengthpriceDataColumnToCustomizedDataTable(): bool
-    {
-        $tableName = 'customized_data';
-        $columnName = 'lengthprice_data';
-        if (!LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-            $sql = LengthPriceDbRepository::getAddColumnSql($tableName, $columnName, 'TEXT DEFAULT NULL');
-            $result = Db::getInstance()->execute($sql);
-            if (!$result) {
-                $this->logToFile("[LengthPrice] addLengthpriceDataColumnToCustomizedDataTable: ALTER TABLE FAILED - DB Error: " . Db::getInstance()->getMsgError());
-            }
-            return (bool)$result;
-        }
-        return true;
-    }
-
-    public function installControllers(): bool
-    {
-        $tab = new Tab();
-        $tab->class_name = 'AdminLengthPriceSettings';
-        $tab->module = $this->name;
-        if (!$tab->id_parent) {
-            $tab->id_parent = -1;
-        }
-        $tab->active = 1;
-        foreach (Language::getLanguages(false) as $lang) {
-            $tab->name[$lang['id_lang']] = 'LengthPrice Settings';
-        }
-
-        try {
-            $result = $tab->add();
-            if (!$result) {
-                $this->logToFile('[LengthPrice] installControllers: Adding Tab FAILED - DB Error: ' . Db::getInstance()->getMsgError());
-            }
-            return $result;
-        } catch (\Exception $e) {
-            $this->logToFile('[LengthPrice] installControllers: Exception adding Tab: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    public function uninstallControllers(): bool
-    {
-        $id_tab = (int)Tab::getIdFromClassName('AdminLengthPriceSettings');
-        if ($id_tab) {
-            $tab = new Tab($id_tab);
-            try {
-                $result = $tab->delete();
-                if (!$result) {
-                    $this->logToFile('[LengthPrice] uninstallControllers: Deleting Tab FAILED - DB Error: ' . Db::getInstance()->getMsgError());
-                }
-                return $result;
-            } catch (\Exception $e) {
-                $this->logToFile('[LengthPrice] uninstallControllers: Exception deleting Tab: ' . $e->getMessage());
-                return false;
-            }
-        }
-        return true;
-    }
-
 
     public function hookActionProductDelete(array $params): void
     {
@@ -372,7 +249,7 @@ class LengthPrice extends Module
 
 
         if ($productId) {
-            if (!LengthPriceDbRepository::deleteProductLengthPriceFlag($productId)) {
+            if (!LengthPriceDbRepository::deleteProductSettings($productId, [$this, 'logToFile'])) {
                 $this->logToFile("[LengthPrice] BŁĄD: hookActionProductDelete - Failed to delete lengthprice_enabled flag for Product ID {$productId}. DB Error: " . Db::getInstance()->getMsgError());
             }
         } else {

@@ -13,4 +13,5 @@ return array(
     'PrestaShop\\Module\\LengthPrice\\Repository\\LengthPriceDbRepository' => $baseDir . '/src/Repository/LengthPriceDbRepository.php',
     'PrestaShop\\Module\\LengthPrice\\Service\\CartService' => $baseDir . '/src/Service/CartService.php',
     'PrestaShop\\Module\\LengthPrice\\Service\\LengthPriceProductSettingsService' => $baseDir . '/src/Service/LengthPriceProductSettingsService.php',
+    'PrestaShop\\Module\\LengthPrice\\Setup\\Installer' => $baseDir . '/src/Setup/Installer.php',
 );

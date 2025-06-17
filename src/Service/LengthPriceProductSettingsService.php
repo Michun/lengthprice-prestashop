@@ -17,7 +17,7 @@ if (!defined('_PS_VERSION_')) {
 
 class LengthPriceProductSettingsService
 {
-    private $module;
+    private \LengthPrice $module;
 
     public function __construct(\LengthPrice $module)
     {
@@ -31,24 +31,24 @@ class LengthPriceProductSettingsService
             return false;
         }
 
-        if (!LengthPriceDbRepository::saveProductLengthPriceFlag($productId, $isEnabled)) {
-            $this->module->logToFile("[LengthPriceProductSettingsService] BŁĄD: handleProductSettingsChange - Failed to save lengthprice_enabled flag for Product ID {$productId} in module table. DB Error: " . Db::getInstance()->getMsgError());
-            return false;
-        }
+        $currentSettings = LengthPriceDbRepository::getProductSettings($productId);
+        $idCustomizationFieldForDb = $currentSettings['id_customization_field'] ?? null;
 
         $languages = Language::getLanguages(false);
-        $existingFieldId = null;
+        $existingCustomizationFieldId = null;
 
-        foreach ($languages as $lang) {
-            $fieldId = LengthPriceDbRepository::getLengthCustomizationFieldIdForProduct($productId, (int)$lang['id_lang']);
-            if ($fieldId !== null) {
-                $existingFieldId = $fieldId;
-                break;
+        if ($idCustomizationFieldForDb) {
+            $cfTest = new CustomizationField($idCustomizationFieldForDb);
+            if (Validate::isLoadedObject($cfTest) && $cfTest->id_product == $productId) {
+                if (LengthPriceDbRepository::isCustomizationFieldMarkedAsLengthPrice($idCustomizationFieldForDb)) {
+                    $existingCustomizationFieldId = $idCustomizationFieldForDb;
+                }
             }
         }
 
+
         if ($isEnabled) {
-            if (!$existingFieldId) {
+            if (!$existingCustomizationFieldId) {
                 $cf = new CustomizationField();
                 $cf->id_product = $productId;
                 $cf->type = Product::CUSTOMIZE_TEXTFIELD;
@@ -60,31 +60,46 @@ class LengthPriceProductSettingsService
                 }
 
                 if ($cf->add(true, false)) {
-                    if (!LengthPriceDbRepository::setCustomizationFieldLengthFlag((int)$cf->id)) {
-                        $this->module->logToFile("[LengthPriceProductSettingsService] BŁĄD: handleProductSettingsChange - Nie udało się ustawić is_lengthprice=1 dla CF ID: {$cf->id}. Błąd DB: " . Db::getInstance()->getMsgError());
+                    $idCustomizationFieldForDb = (int)$cf->id;
+                    if (!LengthPriceDbRepository::setCustomizationFieldAsLengthPrice((int)$cf->id, [$this->module, 'logToFile'])) {
+                        $this->module->logToFile("[LengthPriceProductSettingsService] ERROR: handleProductSettingsChange - Failed to mark CF ID: {$cf->id} as is_lengthprice.");
+                        $cf->delete();
                         return false;
                     }
                 } else {
                     $validation_messages = $cf->getValidationMessages();
                     $errors_string = is_array($validation_messages) ? implode(', ', $validation_messages) : '';
-                    $this->module->logToFile("[LengthPriceProductSettingsService] BŁĄD: handleProductSettingsChange - \$cf->add() nie powiodło się dla Produktu ID: {$productId}. Błędy: {$errors_string}");
+                    $this->module->logToFile("[LengthPriceProductSettingsService] ERROR: handleProductSettingsChange - \$cf->add() failed for Product ID: {$productId}. Errors: {$errors_string}");
                     return false;
                 }
             }
         } else {
-            if ($existingFieldId) {
-                $cf_to_delete = new CustomizationField((int)$existingFieldId);
+            if ($existingCustomizationFieldId) {
+                $cf_to_delete = new CustomizationField((int)$existingCustomizationFieldId);
                 if (Validate::isLoadedObject($cf_to_delete)) {
                     if (!$cf_to_delete->delete(false)) {
-                        $this->module->logToFile("[LengthPriceProductSettingsService] BŁĄD: handleProductSettingsChange - Nie udało się usunąć CustomizationField ID: {$existingFieldId}.");
-                        return false;
+                        $this->module->logToFile("[LengthPriceProductSettingsService] ERROR: handleProductSettingsChange - Failed to delete CustomizationField ID: {$existingCustomizationFieldId}.");
                     }
-                } else {
-                    $this->module->logToFile("[LengthPriceProductSettingsService] BŁĄD: handleProductSettingsChange - Nie udało się załadować CustomizationField ID: {$existingFieldId} do usunięcia.");
-                    return false;
                 }
+                $idCustomizationFieldForDb = null; // Disassociate
             }
         }
+
+        $basePriceType = $currentSettings['base_price_type'] ?? 'per_milimeter';
+        $baseLengthMm = $currentSettings['base_length_mm'] ?? 10.00;
+
+        if (!LengthPriceDbRepository::saveProductSettings(
+            $productId,
+            $isEnabled,
+            $idCustomizationFieldForDb,
+            $basePriceType,
+            $baseLengthMm,
+            [$this->module, 'logToFile']
+        )) {
+            $this->module->logToFile("[LengthPriceProductSettingsService] ERROR: handleProductSettingsChange - Failed to save product settings for Product ID {$productId}. DB Error: " . Db::getInstance()->getMsgError());
+            return false;
+        }
+
         return true;
     }
 }

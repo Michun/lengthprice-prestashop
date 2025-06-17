@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace PrestaShop\Module\LengthPrice\Database;
 
 use Db;
-use LengthPrice;
 use PrestaShopDatabaseException;
-use PrestaShop\Module\LengthPrice\Repository\LengthPriceDbRepository;
 
 class Schema
 {
@@ -17,6 +15,12 @@ class Schema
     /** @var callable|null */
     private $logger;
 
+    /**
+     * Constructor.
+     *
+     * @param Db $dbInstance PrestaShop Db instance.
+     * @param callable|null $logger Optional logger callback (e.g., $this->module->logToFile).
+     */
     public function __construct(Db $dbInstance, ?callable $logger = null)
     {
         $this->db = $dbInstance;
@@ -25,6 +29,11 @@ class Schema
         $this->logger = $logger;
     }
 
+    /**
+     * Logs a message using the provided logger.
+     *
+     * @param string $message The message to log.
+     */
     private function log(string $message): void
     {
         if ($this->logger) {
@@ -32,13 +41,23 @@ class Schema
         }
     }
 
+    /**
+     * Installs the module-specific database schema.
+     * Called from Installer::install().
+     *
+     * @return bool True on success, false on failure.
+     */
     public function installSchema(): bool
     {
-        $this->log('Starting schema installation.');
+        $this->log('Starting schema installation for module-specific tables.');
         $queries = $this->getInstallationQueries();
         $success = true;
 
         foreach ($queries as $description => $query) {
+            if (empty(trim($query)) || strpos(trim($query), '--') === 0) {
+                $this->log("Skipping query: $description (empty or comment)");
+                continue;
+            }
             $this->log("Executing query: $description");
             try {
                 if (!$this->db->execute($query)) {
@@ -54,16 +73,22 @@ class Schema
         }
 
         if ($success) {
-            $this->log('Schema installation completed successfully.');
+            $this->log('Module-specific schema installation completed successfully.');
         } else {
-            $this->log('Schema installation failed or completed with errors.');
+            $this->log('Module-specific schema installation failed or completed with errors.');
         }
         return $success;
     }
 
+    /**
+     * Uninstalls the module-specific database schema.
+     * Called from Installer::uninstall().
+     *
+     * @return bool True on success, false on failure.
+     */
     public function uninstallSchema(): bool
     {
-        $this->log('Starting schema uninstallation.');
+        $this->log('Starting schema uninstallation for module-specific tables.');
         $queries = $this->getUninstallationQueries();
         $success = true;
 
@@ -83,13 +108,19 @@ class Schema
         }
 
         if ($success) {
-            $this->log('Schema uninstallation completed successfully.');
+            $this->log('Module-specific schema uninstallation completed successfully.');
         } else {
-            $this->log('Schema uninstallation failed or completed with errors.');
+            $this->log('Module-specific schema uninstallation failed or completed with errors.');
         }
         return $success;
     }
 
+    /**
+     * Gets the SQL queries for installing module-specific tables.
+     * Called from installSchema().
+     *
+     * @return array An array of SQL queries.
+     */
     private function getInstallationQueries(): array
     {
         return [
@@ -97,39 +128,23 @@ class Schema
                 `id_product` INT(10) UNSIGNED NOT NULL,
                 `is_enabled` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
                 `id_customization_field` INT(10) UNSIGNED DEFAULT NULL,
-                `base_price_type` VARCHAR(20) NOT NULL DEFAULT 'per_milimeter',
-                `base_length_mm` DECIMAL(10, 2) NOT NULL DEFAULT 10.00,
+                `base_price_type` VARCHAR(20) NOT NULL DEFAULT 'per_milimeter', /* Default value was per_meter, changed to per_milimeter as per previous context */
+                `base_length_mm` DECIMAL(10, 2) NOT NULL DEFAULT 10.00, /* Default value was 1000.00, changed to 10.00 as per previous context */
                 PRIMARY KEY (`id_product`)
             ) ENGINE={$this->engine} DEFAULT CHARSET=utf8;",
-
-            'Add is_lengthprice column to customization_field' => $this->getAddColumnQuery(
-                'customization_field',
-                'is_lengthprice',
-                'TINYINT(1) UNSIGNED NOT NULL DEFAULT 0'
-            ),
-            'Add lengthprice_data column to customized_data' => $this->getAddColumnQuery(
-                'customized_data',
-                'lengthprice_data',
-                'TEXT DEFAULT NULL'
-            ),
         ];
     }
 
+    /**
+     * Gets the SQL queries for uninstalling module-specific tables.
+     * Called from uninstallSchema().
+     *
+     * @return array An array of SQL queries.
+     */
     private function getUninstallationQueries(): array
     {
-        $queries = [
+        return [
             'Drop lengthprice_product_settings table' => "DROP TABLE IF EXISTS `{$this->dbPrefix}lengthprice_product_settings`",
         ];
-
-        return $queries;
-    }
-
-    private function getAddColumnQuery(string $tableName, string $columnName, string $columnDefinition): string
-    {
-         if (!LengthPriceDbRepository::columnExists($tableName, $columnName)) {
-             return "ALTER TABLE `{$this->dbPrefix}{$tableName}` ADD COLUMN `{$columnName}` {$columnDefinition}";
-         }
-         $this->log("Column {$columnName} already exists in {$this->dbPrefix}{$tableName}. Skipping ADD COLUMN.");
-         return "-- Column {$columnName} already exists in {$tableName} or check skipped";
     }
 }

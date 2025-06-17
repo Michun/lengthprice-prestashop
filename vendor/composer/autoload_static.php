@@ -28,6 +28,7 @@ class ComposerStaticInitb80ff554b5e0fa6052e8964873272f60
         'PrestaShop\\Module\\LengthPrice\\Repository\\LengthPriceDbRepository' => __DIR__ . '/../..' . '/src/Repository/LengthPriceDbRepository.php',
         'PrestaShop\\Module\\LengthPrice\\Service\\CartService' => __DIR__ . '/../..' . '/src/Service/CartService.php',
         'PrestaShop\\Module\\LengthPrice\\Service\\LengthPriceProductSettingsService' => __DIR__ . '/../..' . '/src/Service/LengthPriceProductSettingsService.php',
+        'PrestaShop\\Module\\LengthPrice\\Setup\\Installer' => __DIR__ . '/../..' . '/src/Setup/Installer.php',
     );
 
     public static function getInitializer(ClassLoader $loader)

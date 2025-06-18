@@ -8,7 +8,7 @@
     </span>
   </div>
   <div class="d-flex justify-content-left align-items-center">
-    <label for="custom_length" class="me-2 mb-0">{l s='Podaj długość' mod='lengthprice'}</label>
+    <label for="custom_length" class="me-2 mb-0">{l s='enter length' mod='lengthprice'}</label>
     <input type="number" step="1" min="0" max="1200" id="custom_length" name="custom_length"
            class="form-control" style="max-width: 100px;" value="0" data-price="{$price_per_unit|floatval}">
     <span class="ms-2">{l s='mm' mod='lengthprice'}</span>

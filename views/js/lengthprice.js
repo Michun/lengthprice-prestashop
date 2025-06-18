@@ -1,42 +1,46 @@
+// /Users/michalnowacki/Projects/prestashop-dev/modules/lengthprice/views/js/lengthprice.js
 document.addEventListener('DOMContentLoaded', function () {
+    const lengthpriceContainer = document.getElementById('lengthprice_container'); // Pobierz kontener
+
+    if (!lengthpriceContainer) {
+        console.error('[LengthPrice JS] Main container #lengthprice_container not found.');
+        return;
+    }
+
     const lengthInput = document.querySelector('#custom_length');
     const pricePreview = document.querySelector('#calculated_price');
     const hiddenCustomizationValueInput = document.getElementById('length_customization_hidden_value');
 
-    if (!lengthInput) {
-        return;
-    }
-    if (!hiddenCustomizationValueInput) {
+    if (!lengthInput || !pricePreview || !hiddenCustomizationValueInput) {
+        console.error('[LengthPrice JS] Missing one or more required elements.');
         return;
     }
 
-    if (typeof lengthpriceCustomizationFieldId === 'undefined' || lengthpriceCustomizationFieldId === null) {
-        // Error handling for undefined lengthpriceCustomizationFieldId can be kept if critical
-        console.error('[LengthPrice JS] Zmienna lengthpriceCustomizationFieldId nie jest zdefiniowana...');
-    } else {
-        const expectedValueInputName = `product_customization[${lengthpriceCustomizationFieldId}][0][value]`;
-        if (hiddenCustomizationValueInput.name !== expectedValueInputName) {
-            console.error(`[LengthPrice JS] Niezgodność nazwy ukrytego pola wartości...`);
-        }
-    }
+    // Odczytaj dane waluty z atrybutów data-*
+    const lengthpriceCurrencySign = lengthpriceContainer.dataset.currencySign || 'zł';
+    const lengthpriceCurrencyDecimals = 2;
 
     const unitPrice = parseFloat(lengthInput.dataset.price || 0);
     if (isNaN(unitPrice) || unitPrice < 0) {
-        console.warn('[LengthPrice JS] Nieprawidłowa lub brakująca cena jednostkowa...');
+        console.warn('[LengthPrice JS] Invalid or missing unit price.');
     }
 
     let debounceTimeout;
 
+    function formatPrice(price) {
+        const fixedPrice = price.toFixed(lengthpriceCurrencyDecimals);
+        let formattedPrice = fixedPrice + ' ' + lengthpriceCurrencySign;
+        return formattedPrice;
+    }
+
+
     function updateDisplayedPrice(length) {
-        let calculatedDisplayPrice = 0;
-        if (!isNaN(length) && unitPrice >= 0 && length >= 0 && pricePreview) {
+        let calculatedRawPrice = 0;
+        if (!isNaN(length) && unitPrice >= 0 && length >= 0) {
             const lengthInBlocks = Math.ceil(length / 10);
-            calculatedDisplayPrice = unitPrice * lengthInBlocks;
-            pricePreview.textContent = calculatedDisplayPrice.toFixed(2);
-        } else if (pricePreview) {
-            pricePreview.textContent = '0.00';
+            calculatedRawPrice = unitPrice * lengthInBlocks;
         }
-        return calculatedDisplayPrice;
+        pricePreview.textContent = formatPrice(calculatedRawPrice);
     }
 
     if (lengthInput) {

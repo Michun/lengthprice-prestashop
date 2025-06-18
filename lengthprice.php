@@ -247,7 +247,6 @@ class LengthPrice extends Module
             $productId = (int)$params['object']->id;
         }
 
-
         if ($productId) {
             if (!LengthPriceDbRepository::deleteProductSettings($productId, [$this, 'logToFile'])) {
                 $this->logToFile("[LengthPrice] BŁĄD: hookActionProductDelete - Failed to delete lengthprice_enabled flag for Product ID {$productId}. DB Error: " . Db::getInstance()->getMsgError());
@@ -317,9 +316,14 @@ class LengthPrice extends Module
 
                 $price_per_unit = Product::getPriceStatic($productId, true, null, 6);
 
+                $currency = new Currency($this->context->currency->id);
+                $initial_raw_price = 0.00;
+
                 $this->context->smarty->assign([
                     'price_per_unit' => $price_per_unit,
                     'customization_field_id' => $customizationFieldId,
+                    'lengthprice_currency_sign' => $currency->sign,
+                    'initial_calculated_price' => $initial_raw_price,
                 ]);
                 return $this->fetch('module:' . $this->name . '/views/templates/hook/lengthprice.tpl');
             }

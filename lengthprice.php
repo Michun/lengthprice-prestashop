@@ -202,7 +202,7 @@ class LengthPrice extends Module
                     $pattern = '/ \(' . preg_quote($this->l('%d pcs x %.0f mm/pc', 'lengthprice'), '/') . '\)$/u';
                     $pattern = str_replace(['%d', '%.0f', '%s'], ['[0-9]+', '[0-9]+', '.+'], $pattern);
                     $baseProductName = preg_replace($pattern, '', $baseProductName);
-                    $modifiedProductName = $baseProductName . $this->l(' (unit: mm)', 'lengthprice') . $annotation_suffix;
+                    $modifiedProductName = $baseProductName . $this->l(' (unit: cm)', 'lengthprice') . $annotation_suffix;
 
                     $orderDetail->product_name = $modifiedProductName;
                     $orderDetail->product_quantity_in_stock = (int)$new_product_quantity;

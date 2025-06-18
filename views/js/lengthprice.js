@@ -1,49 +1,20 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const lengthpriceContainer = document.getElementById('lengthprice_container');
+(function() {
+    let lengthpriceContainer,
+        lengthInput,
+        pricePreview,
+        hiddenCustomizationValueInput,
+        addToCartButton,
+        minLengthMessageElement,
+        maxLengthMessageElement,
+        MIN_LENGTH_MM,
+        MAX_LENGTH_MM,
+        lengthpriceCurrencySign,
+        unitPrice,
+        debounceTimeout,
+        minLengthMessageTemplate,
+        maxLengthMessageTemplate;
 
-    if (!lengthpriceContainer) {
-        console.error('[LengthPrice JS] Main container #lengthprice_container not found.');
-
-    }
-
-    const lengthInput = document.querySelector('#custom_length');
-    const pricePreview = document.querySelector('#calculated_price');
-    const hiddenCustomizationValueInput = document.getElementById('length_customization_hidden_value');
-    const addToCartButton = document.querySelector('#add_to_cart button[data-button-action="add-to-cart"], button.add-to-cart');
-
-    const minLengthMessageElement = document.getElementById('lengthprice_min_length_message');
-    const maxLengthMessageElement = document.getElementById('lengthprice_max_length_message');
-
-    if (!lengthInput || !pricePreview || !hiddenCustomizationValueInput || !addToCartButton) {
-        console.error('[LengthPrice JS] Missing one or more required elements (input, preview, hidden, or add to cart button).');
-        if (!addToCartButton) {
-            console.warn('[LengthPrice JS] Add to cart button not found. Cannot disable/enable.');
-        }
-        return;
-    }
-    if (!minLengthMessageElement) {
-        console.warn('[LengthPrice JS] Minimum length message element not found.');
-    }
-    if (!maxLengthMessageElement) {
-        console.warn('[LengthPrice JS] Maximum length message element not found.');
-    }
-
-
-    const MIN_LENGTH_MM = parseInt(lengthpriceContainer.dataset.minLengthValue) || 80;
-    const MAX_LENGTH_MM = parseInt(lengthpriceContainer.dataset.maxLengthValue) || 1200;
-
-    const lengthpriceCurrencySign = lengthpriceContainer.dataset.currencySign || 'zł';
     const lengthpriceCurrencyDecimals = 2;
-
-    const unitPrice = parseFloat(lengthInput.dataset.price || 0);
-    if (isNaN(unitPrice) || unitPrice < 0) {
-        console.warn('[LengthPrice JS] Invalid or missing unit price.');
-    }
-
-    let debounceTimeout;
-
-    const minLengthMessageTemplate = minLengthMessageElement ? minLengthMessageElement.textContent : '';
-    const maxLengthMessageTemplate = maxLengthMessageElement ? maxLengthMessageElement.textContent : '';
 
     /**
      * Formats the price to two decimal places and appends the currency symbol.
@@ -52,8 +23,9 @@ document.addEventListener('DOMContentLoaded', function () {
      */
     function formatPrice(price) {
         const validPrice = isNaN(price) ? 0 : price;
+        const sign = typeof lengthpriceCurrencySign !== 'undefined' ? lengthpriceCurrencySign : 'zł';
         const fixedPriceWithComma = validPrice.toFixed(lengthpriceCurrencyDecimals).replace('.', ',');
-        return `${fixedPriceWithComma} ${lengthpriceCurrencySign}`;
+        return `${fixedPriceWithComma} ${sign}`;
     }
 
     /**
@@ -62,7 +34,9 @@ document.addEventListener('DOMContentLoaded', function () {
      * @returns {boolean} True if the length is valid, false otherwise.
      */
     function isValidLength(length) {
-        return typeof length === 'number' && !isNaN(length) && length >= MIN_LENGTH_MM && length <= MAX_LENGTH_MM;
+        const min = typeof MIN_LENGTH_MM !== 'undefined' ? MIN_LENGTH_MM : 80;
+        const max = typeof MAX_LENGTH_MM !== 'undefined' ? MAX_LENGTH_MM : 1200;
+        return typeof length === 'number' && !isNaN(length) && length >= min && length <= max;
     }
 
     /**
@@ -71,16 +45,19 @@ document.addEventListener('DOMContentLoaded', function () {
      * @returns {string|null} Error type ('MIN', 'MAX') or null if length is valid.
      */
     function getValidationErrorType(length) {
+        const min = typeof MIN_LENGTH_MM !== 'undefined' ? MIN_LENGTH_MM : 80;
+        const max = typeof MAX_LENGTH_MM !== 'undefined' ? MAX_LENGTH_MM : 1200;
+
         if (typeof length !== 'number' || isNaN(length)) {
-            return null; // No message for non-numeric or empty on initial load/typing
+            return null;
         }
-        if (length > 0 && length < MIN_LENGTH_MM) { // Show message only if a positive value is entered but too small
+        if (length > 0 && length < min) {
             return 'MIN';
         }
-        if (length > MAX_LENGTH_MM) {
+        if (length > max) {
             return 'MAX';
         }
-        return null; // Length is valid or 0
+        return null;
     }
 
     /**
@@ -88,19 +65,27 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {string|null} errorType - Type of error ('MIN', 'MAX') or null to hide messages.
      */
     function displayValidationMessage(errorType) {
-        if (minLengthMessageElement) {
-            minLengthMessageElement.style.display = 'none';
+        const minElement = minLengthMessageElement;
+        const maxElement = maxLengthMessageElement;
+
+        if (minElement) {
+            minElement.style.display = 'none';
         }
-        if (maxLengthMessageElement) {
-            maxLengthMessageElement.style.display = 'none';
+        if (maxElement) {
+            maxElement.style.display = 'none';
         }
 
-        if (errorType === 'MIN' && minLengthMessageElement) {
-            minLengthMessageElement.textContent = minLengthMessageTemplate.replace('%%MIN%%', MIN_LENGTH_MM);
-            minLengthMessageElement.style.display = 'block';
-        } else if (errorType === 'MAX' && maxLengthMessageElement) {
-            maxLengthMessageElement.textContent = maxLengthMessageTemplate.replace('%%MAX%%', MAX_LENGTH_MM);
-            maxLengthMessageElement.style.display = 'block';
+        const minTpl = typeof minLengthMessageTemplate !== 'undefined' ? minLengthMessageTemplate : '';
+        const maxTpl = typeof maxLengthMessageTemplate !== 'undefined' ? maxLengthMessageTemplate : '';
+        const minVal = typeof MIN_LENGTH_MM !== 'undefined' ? MIN_LENGTH_MM : 80;
+        const maxVal = typeof MAX_LENGTH_MM !== 'undefined' ? MAX_LENGTH_MM : 1200;
+
+        if (errorType === 'MIN' && minElement && minTpl) {
+            minElement.textContent = minTpl.replace('%%MIN%%', minVal);
+            minElement.style.display = 'block';
+        } else if (errorType === 'MAX' && maxElement && maxTpl) {
+            maxElement.textContent = maxTpl.replace('%%MAX%%', maxVal);
+            maxElement.style.display = 'block';
         }
     }
 
@@ -109,8 +94,9 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {boolean} isValid - True if the length is valid, false otherwise.
      */
     function updateAddToCartButtonState(isValid) {
-        if (addToCartButton) {
-            addToCartButton.disabled = !isValid;
+        const button = addToCartButton;
+        if (button) {
+            button.disabled = !isValid;
         }
     }
 
@@ -120,50 +106,80 @@ document.addEventListener('DOMContentLoaded', function () {
      */
     function updateDisplayedState(length) {
         let calculatedRawPrice = 0;
-        const isLengthFieldValid = isValidLength(length); // Validation for enabling/disabling cart button
-        const validationErrorType = getValidationErrorType(length); // Validation for displaying messages
+        const isLengthFieldValid = isValidLength(length);
+        const validationErrorType = getValidationErrorType(length);
+        const currentUnitPrice = typeof unitPrice !== 'undefined' ? unitPrice : 0;
 
         if (!isLengthFieldValid) {
             displayValidationMessage(validationErrorType);
             updateAddToCartButtonState(isLengthFieldValid);
-            pricePreview.textContent = formatPrice(0);
+            if (pricePreview) {
+                pricePreview.textContent = formatPrice(0);
+            }
             return;
         }
 
-        if (!isNaN(length) && unitPrice >= 0 && length >= 0) {
+        if (!isNaN(length) && currentUnitPrice >= 0 && length >= 0) {
             const lengthInBlocks = Math.ceil(length / 10);
-            calculatedRawPrice = unitPrice * lengthInBlocks;
+            calculatedRawPrice = currentUnitPrice * lengthInBlocks;
         }
 
-        pricePreview.textContent = formatPrice(calculatedRawPrice);
+        if (pricePreview) {
+            pricePreview.textContent = formatPrice(calculatedRawPrice);
+        }
         displayValidationMessage(validationErrorType);
         updateAddToCartButtonState(isLengthFieldValid);
     }
 
-    if (lengthInput) {
-        lengthInput.addEventListener('input', function () {
-            clearTimeout(debounceTimeout);
-            debounceTimeout = setTimeout(() => {
-                let length = parseFloat(lengthInput.value);
+    /**
+     * Initializes or re-initializes the module's JavaScript logic.
+     * Queries DOM elements, reads configuration, and sets initial state.
+     */
+    function initializeLengthPrice() {
+        lengthpriceContainer = document.getElementById('lengthprice_container');
+        if (!lengthpriceContainer) {
+            console.error('[LengthPrice JS] Main container #lengthprice_container not found. Initialization aborted.');
+            return;
+        }
 
-                if (isNaN(length)) {
-                    length = 0;
-                }
+        lengthInput = document.querySelector('#custom_length');
+        pricePreview = document.querySelector('#calculated_price');
+        hiddenCustomizationValueInput = document.getElementById('length_customization_hidden_value');
+        addToCartButton = document.querySelector('#add_to_cart button[data-button-action="add-to-cart"], button.add-to-cart');
+        minLengthMessageElement = document.getElementById('lengthprice_min_length_message');
+        maxLengthMessageElement = document.getElementById('lengthprice_max_length_message');
 
-                updateDisplayedState(length);
+        if (!lengthInput) {
+            console.error('[LengthPrice JS] #custom_length input not found. Initialization aborted.');
+            if (addToCartButton) updateAddToCartButtonState(true);
+            return;
+        }
 
-                if (hiddenCustomizationValueInput) {
-                    hiddenCustomizationValueInput.value = isNaN(parseFloat(lengthInput.value)) ? '' : parseFloat(lengthInput.value).toString();
-                }
-            }, 300);
-        });
+        if (!pricePreview) console.warn('[LengthPrice JS] #calculated_price element not found.');
+        if (!hiddenCustomizationValueInput) console.warn('[LengthPrice JS] #length_customization_hidden_value element not found.');
+        if (!addToCartButton) console.warn('[LengthPrice JS] Add to cart button not found.');
+        if (!minLengthMessageElement) console.warn('[LengthPrice JS] Minimum length message element not found.');
+        if (!maxLengthMessageElement) console.warn('[LengthPrice JS] Maximum length message element not found.');
+
+        MIN_LENGTH_MM = parseInt(lengthpriceContainer.dataset.minLengthValue) || 80;
+        MAX_LENGTH_MM = parseInt(lengthpriceContainer.dataset.maxLengthValue) || 1200;
+        lengthpriceCurrencySign = lengthpriceContainer.dataset.currencySign || 'zł';
+
+        unitPrice = parseFloat(lengthInput.dataset.price || 0);
+        if (isNaN(unitPrice) || unitPrice < 0) {
+            console.warn('[LengthPrice JS] Invalid or missing unit price from data-price attribute. Defaulting to 0.');
+            unitPrice = 0;
+        }
+
+        minLengthMessageTemplate = minLengthMessageElement ? minLengthMessageElement.textContent : '';
+        maxLengthMessageTemplate = maxLengthMessageElement ? maxLengthMessageElement.textContent : '';
 
         const initialLengthRaw = lengthInput.value;
         let initialLength = parseFloat(initialLengthRaw);
 
         if (isNaN(initialLength) || initialLengthRaw.trim() === '') {
-            initialLength = 0; // Default to 0 if empty or not a number
-            if (lengthInput.value.trim() === '') lengthInput.value = '0'; // Set input to '0' if it was empty
+            initialLength = 0;
+            if (lengthInput.value.trim() === '') lengthInput.value = '0';
         }
 
         updateDisplayedState(initialLength);
@@ -171,8 +187,37 @@ document.addEventListener('DOMContentLoaded', function () {
         if (hiddenCustomizationValueInput) {
             hiddenCustomizationValueInput.value = initialLength.toString();
         }
-    } else {
-        // Fallback if lengthInput is not found
-        if(addToCartButton) updateAddToCartButtonState(true); // Enable button if no length input
+        console.log('[LengthPrice JS] Initialized.');
     }
-});
+
+    document.addEventListener('DOMContentLoaded', initializeLengthPrice);
+
+    document.addEventListener('input', function(event) {
+        if (event.target.id === 'custom_length') {
+            const currentLengthInput = event.target;
+
+            clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(() => {
+                let length = parseFloat(currentLengthInput.value);
+                if (isNaN(length)) {
+                    length = 0;
+                }
+                updateDisplayedState(length);
+
+                const currentHiddenInput = document.getElementById('length_customization_hidden_value');
+                if (currentHiddenInput) {
+                    currentHiddenInput.value = isNaN(parseFloat(currentLengthInput.value)) ? '' : parseFloat(currentLengthInput.value).toString();
+                }
+            }, 300);
+        }
+    });
+
+    if (typeof prestashop !== 'undefined' && prestashop.on) {
+        prestashop.on('updatedProduct', function() {
+            initializeLengthPrice();
+        });
+    } else {
+        console.warn('[LengthPrice JS] PrestaShop event system not detected. AJAX re-initialization might not work.');
+    }
+
+})();

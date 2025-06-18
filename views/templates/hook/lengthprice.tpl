@@ -13,6 +13,15 @@
            class="form-control" style="max-width: 100px;" value="0" data-price="{$price_per_unit|floatval}">
     <span class="ms-2">{l s='mm' mod='lengthprice'}</span>
   </div>
+
+  <div id="lengthprice_min_length_message" class="alert alert-warning mt-2" style="display: none;">
+    {l s='Minimum length is %min_length% mm.' sprintf=['%min_length%' => '%%MIN%%'] mod='lengthprice'}
+  </div>
+
+  {* Komunikat o maksymalnej długości (jeśli potrzebny w przyszłości) *}
+  <div id="lengthprice_max_length_message" class="alert alert-warning mt-2" style="display: none;">
+    {l s='Maximum length is %max_length% mm.' sprintf=['%max_length%' => '%%MAX%%'] mod='lengthprice'}
+  </div>
 </div>
 {* Ukryte pole dla typu personalizacji - PrestaShop używa tego do identyfikacji typu pola *}
 <input type="hidden"

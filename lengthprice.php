@@ -324,6 +324,8 @@ class LengthPrice extends Module
                     'customization_field_id' => $customizationFieldId,
                     'lengthprice_currency_sign' => $currency->sign,
                     'initial_calculated_price' => $initial_raw_price,
+                    'MIN_LENGTH_MM' => 80,
+                    'MAX_LENGTH_MM' => 1200,
                 ]);
                 return $this->fetch('module:' . $this->name . '/views/templates/hook/lengthprice.tpl');
             }
